@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { Platform } from 'react-native';
 
-import { authStorage } from './storage';
+import { storage } from './storage';
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey =
@@ -11,7 +11,7 @@ const isBrowser = Platform.OS === 'web' && typeof window !== 'undefined';
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    storage: authStorage,
+    storage,
     autoRefreshToken: isBrowser,
     persistSession: isBrowser || Platform.OS !== 'web',
     detectSessionInUrl: isBrowser,
