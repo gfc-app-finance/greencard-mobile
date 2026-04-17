@@ -1,56 +1,129 @@
-# Welcome to your Expo app 👋
+# Greencard Mobile App
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Greencard (`GCF`) is an Expo + React Native + TypeScript mobile product for cross-border money movement, account management, payments, cards, savings, verification, and support flows.
 
-## Get started
+This repository is set up to run like a product engineering codebase rather than a throwaway MVP:
 
-1. Install dependencies
+- shared engineering standards
+- documented architecture and onboarding
+- lint, typecheck, format, and test commands
+- local Git hooks for commit/push protection
+- GitHub Actions CI for pull requests
 
-   ```bash
-   npm install
-   ```
+## Stack
 
-2. Start the app
+- Expo / React Native
+- Expo Router
+- TypeScript
+- React Query
+- Supabase
+- Jest + jest-expo
+- ESLint + Prettier
 
-   ```bash
-   npx expo start
-   ```
+## Quick Start
 
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+1. Clone the repository.
+2. Install dependencies:
 
 ```bash
-npm run reset-project
+npm install
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+3. Create your local environment file:
 
-### Other setup steps
+```bash
+cp .env.example .env
+```
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+4. Fill in the required Supabase values in `.env`.
+5. Start the app:
 
-## Learn more
+```bash
+npm run start
+```
 
-To learn more about developing your project with Expo, look at the following resources:
+## Common Commands
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+| Command | Purpose |
+| --- | --- |
+| `npm run start` | Start Expo locally |
+| `npm run android` | Launch Android development session |
+| `npm run ios` | Launch iOS development session |
+| `npm run web` | Launch the web target |
+| `npm run lint` | Run ESLint |
+| `npm run lint:fix` | Auto-fix lint issues where possible |
+| `npm run format` | Format the repository with Prettier |
+| `npm run format:check` | Check formatting only |
+| `npm run typecheck` | Run TypeScript checks |
+| `npm run test` | Run the test suite |
+| `npm run test:ci` | Run tests with coverage for CI |
+| `npm run build:web` | Validate a production-style web export |
+| `npm run check` | Run lint, typecheck, and CI-style tests |
 
-## Join the community
+## Environment Variables
 
-Join our community of developers creating universal apps.
+The app currently expects:
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+- `EXPO_PUBLIC_SUPABASE_URL`
+- `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
+
+See [docs/ENVIRONMENT.md](./docs/ENVIRONMENT.md) for rules, examples, and security expectations.
+
+## Repository Standards
+
+- Branches: `feature/...`, `fix/...`, `chore/...`, `refactor/...`, `docs/...`, `test/...`
+- Commits: Conventional Commits such as `feat(payments): add review summary`
+- PRs: reviewed, scoped, and linked to testing/documentation updates
+- No direct pushes to `main`
+
+See:
+
+- [CONTRIBUTING.md](./CONTRIBUTING.md)
+- [docs/ENGINEERING_STANDARDS.md](./docs/ENGINEERING_STANDARDS.md)
+- [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)
+- [docs/TESTING.md](./docs/TESTING.md)
+- [docs/RELEASES.md](./docs/RELEASES.md)
+- [SECURITY.md](./SECURITY.md)
+
+## Project Structure
+
+```text
+app/          Expo Router entrypoints and navigation groups
+components/   Shared UI primitives
+constants/    Theme, colors, spacing, tokens
+features/     Product feature modules
+hooks/        Shared hooks
+lib/          Environment, auth, storage, utility helpers
+services/     Data shaping and business-logic helpers
+types/        Shared TypeScript models
+tests/        Unit and helper tests
+docs/         Team-facing engineering documentation
+```
+
+See [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) for a deeper walkthrough.
+
+## CI
+
+GitHub Actions runs the following checks on pull requests:
+
+- install dependencies
+- lint
+- typecheck
+- test with coverage
+
+Additional repo protection still needs to be enforced in GitHub settings:
+
+- protect `main`
+- require PR review before merge
+- require CI status checks before merge
+- enable secret scanning and Dependabot alerts
+
+## Onboarding a New Engineer
+
+1. Read this README.
+2. Read [CONTRIBUTING.md](./CONTRIBUTING.md).
+3. Read [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md).
+4. Read [docs/ENGINEERING_STANDARDS.md](./docs/ENGINEERING_STANDARDS.md).
+5. Copy `.env.example` to `.env`.
+6. Run `npm install`.
+7. Run `npm run check` before opening your first PR.
