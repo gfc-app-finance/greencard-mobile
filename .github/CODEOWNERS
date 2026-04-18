@@ -1,4 +1,7 @@
 # Default reviewer for all changes in this repository.
+
 # GitHub will auto-request review when a PR touches these paths,
+
 # as long as the email maps to a GitHub user with access to the repo.
-* Damilola.emiola@dcodeanalytics.xyz
+
+- Damilola.emiola@dcodeanalytics.xyz
