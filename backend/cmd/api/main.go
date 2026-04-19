@@ -1,0 +1,93 @@
+package main
+
+import (
+	"context"
+	"errors"
+	"log"
+	"log/slog"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+
+	"github.com/gfc-app-finance/greencard-mobile/backend/internal/config"
+	"github.com/gfc-app-finance/greencard-mobile/backend/internal/handler"
+	applogger "github.com/gfc-app-finance/greencard-mobile/backend/internal/logger"
+	"github.com/gfc-app-finance/greencard-mobile/backend/internal/repository"
+	"github.com/gfc-app-finance/greencard-mobile/backend/internal/service"
+)
+
+func main() {
+	cfg, err := config.Load()
+	if err != nil {
+		log.Printf("backend config error: %v", err)
+		os.Exit(1)
+	}
+
+	logger := applogger.New(cfg.AppName, cfg.Env, cfg.LogLevel)
+
+	if err := run(logger, cfg); err != nil {
+		logger.Error("api server exited with error", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+}
+
+func run(logger *slog.Logger, cfg config.Config) error {
+	healthService := service.NewHealthService(cfg.AppName, cfg.Env, cfg.Version)
+	authService := service.NewSupabaseAuthService(logger, cfg.Supabase)
+	profileRepository := repository.NewSupabaseProfileRepository(logger, cfg.Supabase)
+	accountRepository := repository.NewSupabaseAccountRepository(logger, cfg.Supabase)
+	permissionHelper := service.NewPermissionHelper()
+	profileService := service.NewProfileService(logger, profileRepository, permissionHelper)
+	accountService := service.NewAccountService(logger, accountRepository)
+	router := handler.NewRouter(logger, healthService, authService, profileService, accountService)
+
+	server := &http.Server{
+		Addr:              ":" + cfg.Port,
+		Handler:           router,
+		ReadHeaderTimeout: cfg.HTTP.ReadTimeout,
+		ReadTimeout:       cfg.HTTP.ReadTimeout,
+		WriteTimeout:      cfg.HTTP.WriteTimeout,
+		IdleTimeout:       cfg.HTTP.IdleTimeout,
+	}
+
+	serverErrCh := make(chan error, 1)
+
+	go func() {
+		logger.Info(
+			"starting api server",
+			slog.String("address", server.Addr),
+			slog.String("environment", cfg.Env),
+			slog.String("version", cfg.Version),
+		)
+
+		err := server.ListenAndServe()
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			serverErrCh <- err
+			return
+		}
+
+		serverErrCh <- nil
+	}()
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	select {
+	case err := <-serverErrCh:
+		return err
+	case <-ctx.Done():
+		logger.Info("shutdown signal received")
+	}
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.HTTP.ShutdownTimeout)
+	defer cancel()
+
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		return err
+	}
+
+	logger.Info("api server stopped gracefully")
+
+	return nil
+}
