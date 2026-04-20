@@ -1,6 +1,7 @@
 import { Redirect, Stack, usePathname } from 'expo-router';
 
 import { useOnboarding } from '@/hooks/use-onboarding';
+import { isAuthConfirmationPath } from '@/lib/auth-deep-link';
 
 export default function PublicLayout() {
   const pathname = usePathname();
@@ -10,7 +11,7 @@ export default function PublicLayout() {
     return null;
   }
 
-  if (shouldShowOnboarding && pathname !== '/') {
+  if (shouldShowOnboarding && pathname !== '/' && !isAuthConfirmationPath(pathname)) {
     return <Redirect href="/" />;
   }
 
