@@ -15,6 +15,7 @@ import (
 	applogger "github.com/gfc-app-finance/greencard-mobile/backend/internal/logger"
 	"github.com/gfc-app-finance/greencard-mobile/backend/internal/repository"
 	"github.com/gfc-app-finance/greencard-mobile/backend/internal/service"
+	"github.com/gfc-app-finance/greencard-mobile/backend/internal/worker"
 )
 
 func main() {
@@ -39,34 +40,48 @@ func run(logger *slog.Logger, cfg config.Config) error {
 	accountRepository := repository.NewSupabaseAccountRepository(logger, cfg.Supabase)
 	activityRepository := repository.NewSupabaseActivityRepository(logger, cfg.Supabase)
 	transactionRepository := repository.NewSupabaseTransactionRepository(logger, cfg.Supabase)
+	idempotencyRepository := repository.NewSupabaseIdempotencyRepository(logger, cfg.Supabase)
+	webhookEventRepository := repository.NewSupabaseWebhookEventRepository(logger, cfg.Supabase)
 	recipientRepository := repository.NewSupabaseRecipientRepository(logger, cfg.Supabase)
 	supportRepository := repository.NewSupabaseSupportRepository(logger, cfg.Supabase)
 	permissionHelper := service.NewPermissionHelper()
-	profileService := service.NewProfileService(logger, profileRepository, permissionHelper)
-	accountService := service.NewAccountService(logger, accountRepository, permissionHelper)
-	activityService := service.NewActivityService(logger, activityRepository, accountRepository)
+	verificationResolver := service.NewVerificationResolver(logger, profileRepository)
+	idempotencyService := service.NewIdempotencyService(logger, idempotencyRepository)
+	profileService := service.NewProfileService(logger, profileRepository, permissionHelper, verificationResolver)
+	accountService := service.NewAccountService(logger, accountRepository, permissionHelper, cfg.Features.EnableSeededAccountFallback)
+	activityService := service.NewActivityService(logger, activityRepository, accountRepository, cfg.Features.EnableSeededAccountFallback)
 	transactionService := service.NewTransactionService(
 		logger,
 		transactionRepository,
 		transactionRepository,
 		transactionRepository,
-		profileRepository,
 		accountRepository,
 		recipientRepository,
 		permissionHelper,
 		activityService,
+		verificationResolver,
 	)
-	recipientService := service.NewRecipientService(logger, recipientRepository, profileRepository, permissionHelper)
+	transactionLifecycleService, ok := transactionService.(service.TransactionLifecycleUpdateService)
+	if !ok {
+		return errors.New("transaction lifecycle update service is not available")
+	}
+	webhookService := service.NewWebhookService(
+		logger,
+		webhookEventRepository,
+		transactionLifecycleService,
+		service.NewWebhookProviders(cfg.Webhooks)...,
+	)
+	recipientService := service.NewRecipientService(logger, recipientRepository, permissionHelper, verificationResolver)
 	supportService := service.NewSupportService(
 		logger,
 		supportRepository,
 		supportRepository,
-		profileRepository,
 		transactionRepository,
 		transactionRepository,
 		transactionRepository,
 		permissionHelper,
 		activityService,
+		verificationResolver,
 	)
 	router := handler.NewRouter(
 		logger,
@@ -75,10 +90,22 @@ func run(logger *slog.Logger, cfg config.Config) error {
 		profileService,
 		accountService,
 		transactionService,
+		idempotencyService,
+		webhookService,
 		activityService,
 		recipientService,
 		supportService,
+		cfg.Features.EnableTransactionSimulation,
 	)
+	transactionJobs := worker.NewTransactionJobs(
+		logger,
+		cfg.Worker,
+		transactionRepository,
+		transactionRepository,
+		transactionRepository,
+		transactionLifecycleService,
+	)
+	workerEngine := worker.NewEngine(logger, cfg.Worker.PollInterval, transactionJobs.Jobs()...)
 
 	server := &http.Server{
 		Addr:              ":" + cfg.Port,
@@ -89,7 +116,19 @@ func run(logger *slog.Logger, cfg config.Config) error {
 		IdleTimeout:       cfg.HTTP.IdleTimeout,
 	}
 
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer func() {
+		stop()
+		if cfg.Worker.Enabled {
+			workerEngine.Wait()
+		}
+	}()
+
 	serverErrCh := make(chan error, 1)
+
+	if cfg.Worker.Enabled {
+		workerEngine.Start(ctx)
+	}
 
 	go func() {
 		logger.Info(
@@ -107,9 +146,6 @@ func run(logger *slog.Logger, cfg config.Config) error {
 
 		serverErrCh <- nil
 	}()
-
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
 
 	select {
 	case err := <-serverErrCh:

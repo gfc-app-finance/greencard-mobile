@@ -53,3 +53,9 @@ app-example
 # test artifacts
 junit.xml
 test-results/
+
+# local Go backend validation artifacts
+.gocache/
+.gomodcache/
+.gotmp/
+/backend/api.exe

@@ -17,18 +17,31 @@ var (
 	ErrPaymentTransactionsUnavailable  = errors.New("payment transactions unavailable")
 	ErrPaymentTransactionNotFound      = errors.New("payment transaction not found")
 	ErrTransactionPermissionDenied     = errors.New("transaction permission denied")
+	ErrInsufficientFunds               = errors.New("insufficient funds")
 )
 
 type TransactionService interface {
 	CreateFunding(ctx context.Context, user model.AuthenticatedUser, input model.CreateFundingTransactionInput) (model.FundingTransactionResponse, error)
 	ListFunding(ctx context.Context, user model.AuthenticatedUser) (model.FundingTransactionListResponse, error)
 	GetFunding(ctx context.Context, user model.AuthenticatedUser, transactionID string) (model.FundingTransactionResponse, error)
+	UpdateFundingStatus(ctx context.Context, user model.AuthenticatedUser, transactionID string, targetStatus model.FundingStatus, source model.TransactionStatusSource, reason *string) (model.FundingTransactionResponse, error)
+	SimulateAdvanceFunding(ctx context.Context, user model.AuthenticatedUser, transactionID string) (model.FundingTransactionResponse, error)
 	CreateTransfer(ctx context.Context, user model.AuthenticatedUser, input model.CreateTransferTransactionInput) (model.TransferTransactionResponse, error)
 	ListTransfers(ctx context.Context, user model.AuthenticatedUser) (model.TransferTransactionListResponse, error)
 	GetTransfer(ctx context.Context, user model.AuthenticatedUser, transactionID string) (model.TransferTransactionResponse, error)
+	UpdateTransferStatus(ctx context.Context, user model.AuthenticatedUser, transactionID string, targetStatus model.TransferStatus, source model.TransactionStatusSource, reason *string) (model.TransferTransactionResponse, error)
+	SimulateAdvanceTransfer(ctx context.Context, user model.AuthenticatedUser, transactionID string) (model.TransferTransactionResponse, error)
 	CreatePayment(ctx context.Context, user model.AuthenticatedUser, input model.CreatePaymentTransactionInput) (model.PaymentTransactionResponse, error)
 	ListPayments(ctx context.Context, user model.AuthenticatedUser) (model.PaymentTransactionListResponse, error)
 	GetPayment(ctx context.Context, user model.AuthenticatedUser, transactionID string) (model.PaymentTransactionResponse, error)
+	UpdatePaymentStatus(ctx context.Context, user model.AuthenticatedUser, transactionID string, targetStatus model.PaymentStatus, source model.TransactionStatusSource, reason *string) (model.PaymentTransactionResponse, error)
+	SimulateAdvancePayment(ctx context.Context, user model.AuthenticatedUser, transactionID string) (model.PaymentTransactionResponse, error)
+}
+
+type TransactionLifecycleUpdateService interface {
+	UpdateFundingStatusByReference(ctx context.Context, reference string, targetStatus model.FundingStatus, source model.TransactionStatusSource, reason *string) (model.FundingTransactionResponse, error)
+	UpdateTransferStatusByReference(ctx context.Context, reference string, targetStatus model.TransferStatus, source model.TransactionStatusSource, reason *string) (model.TransferTransactionResponse, error)
+	UpdatePaymentStatusByReference(ctx context.Context, reference string, targetStatus model.PaymentStatus, source model.TransactionStatusSource, reason *string) (model.PaymentTransactionResponse, error)
 }
 
 type DefaultTransactionService struct {
@@ -36,11 +49,11 @@ type DefaultTransactionService struct {
 	fundingRepo   repository.FundingTransactionRepository
 	transferRepo  repository.TransferTransactionRepository
 	paymentRepo   repository.PaymentTransactionRepository
-	profileRepo   repository.ProfileRepository
 	accountRepo   repository.AccountRepository
 	recipientRepo repository.RecipientRepository
 	permissions   PermissionHelper
 	activities    ActivityEventRecorder
+	verification  VerificationResolver
 }
 
 func NewTransactionService(
@@ -48,40 +61,23 @@ func NewTransactionService(
 	fundingRepo repository.FundingTransactionRepository,
 	transferRepo repository.TransferTransactionRepository,
 	paymentRepo repository.PaymentTransactionRepository,
-	profileRepo repository.ProfileRepository,
 	accountRepo repository.AccountRepository,
 	recipientRepo repository.RecipientRepository,
 	permissions PermissionHelper,
 	activities ActivityEventRecorder,
+	verification VerificationResolver,
 ) TransactionService {
 	return &DefaultTransactionService{
 		logger:        logger,
 		fundingRepo:   fundingRepo,
 		transferRepo:  transferRepo,
 		paymentRepo:   paymentRepo,
-		profileRepo:   profileRepo,
 		accountRepo:   accountRepo,
 		recipientRepo: recipientRepo,
 		permissions:   permissions,
 		activities:    activities,
+		verification:  verification,
 	}
-}
-
-func (s *DefaultTransactionService) currentVerificationStatus(ctx context.Context, userID string) (model.VerificationStatus, error) {
-	record, found, err := s.profileRepo.GetByUserID(ctx, userID)
-	if err != nil {
-		s.logger.Error("failed to resolve verification status for transaction", slog.String("user_id", userID), slog.String("error", err.Error()))
-		return "", err
-	}
-
-	if !found {
-		record = model.ProfileRecord{
-			ID:                 userID,
-			VerificationStatus: model.VerificationStatusBasic,
-		}
-	}
-
-	return ResolveVerificationStatus(record.VerificationStatus, record), nil
 }
 
 func (s *DefaultTransactionService) syncFundingActivity(ctx context.Context, userID string, record model.FundingTransactionRecord) {

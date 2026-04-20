@@ -12,6 +12,7 @@ The backend is intentionally layered but lightweight:
 - `backend/internal/repository`: Supabase-backed persistence
 - `backend/internal/model`: request and response models
 - `backend/internal/response`: JSON and error helpers
+- `backend/internal/worker`: in-process background jobs for progression, timeouts, and async operational checks
 
 ## Auth Model
 
@@ -48,6 +49,9 @@ For transaction writes:
 - use real owned account records only
 - do not fall back to seeded placeholder accounts on create/update paths
 - payment creation must validate a real owned recipient before persisting
+- transaction create handlers should use idempotency support for safe retry behavior when an `Idempotency-Key` header is provided
+- transaction status changes must flow through the shared transition service (`UpdateFundingStatus`, `UpdateTransferStatus`, `UpdatePaymentStatus`), not direct repository status updates
+- balance effects must be applied only from the service-owned completion path, never directly from handlers
 
 ## Validation Rules
 
@@ -93,3 +97,19 @@ make check
 - read endpoints must stay side-effect free
 - do not advance transaction status inside `GET` or list handlers/services
 - if you need mocked progression for development, keep it behind an explicit helper, job, or test path instead of tying it to read traffic
+- seeded account fallback on read paths is for local/non-production use only and should stay disabled for broader external testing
+- if explicit transaction simulation is enabled, keep it non-production only and mount it behind an intentional route such as `/simulate/advance`
+- valid lifecycle changes should be enforced centrally for funding, transfer, and payment transactions, and invalid transitions should fail cleanly instead of being coerced
+- persist `status_reason`, `status_source`, and `last_status_change_at` from the same transition flow so future provider/manual updaters do not fork lifecycle metadata behavior
+- when a transaction status changes, the corresponding activity item should be updated in the same service flow so feed state remains consistent
+- balance mutation should happen only on the right committed status, not on transaction creation
+- completion-side money mutation should create `account_balance_movements` records so there is a minimal audit trail for how balances changed
+- repeated completion events must be safe: settlement should no-op if the matching balance movement already exists
+- final sufficient-balance checks belong in the completion/settlement path for debit flows, even if create-time validation already rejected obviously impossible requests
+- provider webhook handlers must verify signatures before parsing or trusting the event payload
+- provider-specific payload mapping belongs in webhook provider adapters, not in HTTP handlers
+- webhook processing should identify transactions by safe internal references, then call the shared transaction lifecycle updater so activity sync and balance mutation stay centralized
+- duplicate webhook deliveries must be safe by combining webhook event receipt records with idempotent completion/settlement logic
+- background workers should never mutate transactions directly through repositories; they must call the shared lifecycle updater by reference
+- worker-driven timeouts or delayed progression must remain idempotent so repeated polling does not duplicate money effects
+- retry evaluation is allowed to inspect and log candidate work, but it should not invent a second status-mutation path outside the lifecycle service

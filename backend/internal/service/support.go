@@ -28,40 +28,40 @@ type DefaultSupportService struct {
 	logger       *slog.Logger
 	ticketRepo   repository.SupportTicketRepository
 	messageRepo  repository.SupportTicketMessageRepository
-	profileRepo  repository.ProfileRepository
 	fundingRepo  repository.FundingTransactionRepository
 	transferRepo repository.TransferTransactionRepository
 	paymentRepo  repository.PaymentTransactionRepository
 	permissions  PermissionHelper
 	activities   ActivityEventRecorder
+	verification VerificationResolver
 }
 
 func NewSupportService(
 	logger *slog.Logger,
 	ticketRepo repository.SupportTicketRepository,
 	messageRepo repository.SupportTicketMessageRepository,
-	profileRepo repository.ProfileRepository,
 	fundingRepo repository.FundingTransactionRepository,
 	transferRepo repository.TransferTransactionRepository,
 	paymentRepo repository.PaymentTransactionRepository,
 	permissions PermissionHelper,
 	activities ActivityEventRecorder,
+	verification VerificationResolver,
 ) SupportService {
 	return &DefaultSupportService{
 		logger:       logger,
 		ticketRepo:   ticketRepo,
 		messageRepo:  messageRepo,
-		profileRepo:  profileRepo,
 		fundingRepo:  fundingRepo,
 		transferRepo: transferRepo,
 		paymentRepo:  paymentRepo,
 		permissions:  permissions,
 		activities:   activities,
+		verification: verification,
 	}
 }
 
 func (s *DefaultSupportService) CreateTicket(ctx context.Context, user model.AuthenticatedUser, input model.CreateSupportTicketInput) (model.SupportTicketResponse, error) {
-	status, err := s.currentVerificationStatus(ctx, user.ID)
+	status, err := s.verification.ResolveForUser(ctx, user.ID)
 	if err != nil {
 		return model.SupportTicketResponse{}, ErrSupportUnavailable
 	}
@@ -178,23 +178,6 @@ func (s *DefaultSupportService) getTicketForUser(ctx context.Context, userID, ti
 	}
 
 	return record, nil
-}
-
-func (s *DefaultSupportService) currentVerificationStatus(ctx context.Context, userID string) (model.VerificationStatus, error) {
-	record, found, err := s.profileRepo.GetByUserID(ctx, userID)
-	if err != nil {
-		s.logger.Error("failed to resolve verification status for support", slog.String("user_id", userID), slog.String("error", err.Error()))
-		return "", err
-	}
-
-	if !found {
-		record = model.ProfileRecord{
-			ID:                 userID,
-			VerificationStatus: model.VerificationStatusBasic,
-		}
-	}
-
-	return ResolveVerificationStatus(record.VerificationStatus, record), nil
 }
 
 func (s *DefaultSupportService) validateCreateTicketInput(ctx context.Context, userID string, input model.CreateSupportTicketInput) (model.SupportTicketRecord, ValidationErrors, error) {

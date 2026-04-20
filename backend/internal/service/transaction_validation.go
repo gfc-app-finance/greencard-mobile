@@ -123,7 +123,12 @@ func (s *DefaultTransactionService) validateTransferInput(
 		return model.AccountRecord{}, model.AccountRecord{}, 0, nil, ValidationErrors{{Field: "destination_currency", Message: "destination_currency must match the destination account"}}
 	}
 
-	destinationAmount, fxRate := convertAmount(input.SourceCurrency, input.DestinationCurrency, input.SourceAmount)
+	sourceAmount := roundTo2(input.SourceAmount)
+	if sourceAccount.AvailableBalance < sourceAmount || sourceAccount.Balance < sourceAmount {
+		return model.AccountRecord{}, model.AccountRecord{}, 0, nil, ValidationErrors{{Field: "source_amount", Message: "source account does not have enough available balance for this transfer"}}
+	}
+
+	destinationAmount, fxRate := convertAmount(input.SourceCurrency, input.DestinationCurrency, sourceAmount)
 
 	return sourceAccount, destinationAccount, destinationAmount, fxRate, nil
 }
@@ -198,8 +203,13 @@ func (s *DefaultTransactionService) validatePaymentInput(
 		return model.AccountRecord{}, model.RecipientRecord{}, 0, nil, ValidationErrors{{Field: "payment_type", Message: "payment_type is not compatible with the selected recipient"}}
 	}
 
-	_, fxRate := convertAmount(sourceAccount.Currency, input.Currency, input.Amount)
+	amount := roundTo2(input.Amount)
+	_, fxRate := convertAmount(sourceAccount.Currency, input.Currency, amount)
 	fee := roundTo2(mockPaymentFee(input.PaymentType, input.Currency))
+	totalAmount := roundTo2(amount + fee)
+	if sourceAccount.AvailableBalance < totalAmount || sourceAccount.Balance < totalAmount {
+		return model.AccountRecord{}, model.RecipientRecord{}, 0, nil, ValidationErrors{{Field: "amount", Message: "source account does not have enough available balance for this payment"}}
+	}
 
 	return sourceAccount, recipient, fee, fxRate, nil
 }

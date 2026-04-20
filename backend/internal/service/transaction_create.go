@@ -10,7 +10,7 @@ import (
 )
 
 func (s *DefaultTransactionService) CreateFunding(ctx context.Context, user model.AuthenticatedUser, input model.CreateFundingTransactionInput) (model.FundingTransactionResponse, error) {
-	status, err := s.currentVerificationStatus(ctx, user.ID)
+	status, err := s.verification.ResolveForUser(ctx, user.ID)
 	if err != nil {
 		return model.FundingTransactionResponse{}, ErrFundingTransactionsUnavailable
 	}
@@ -26,14 +26,16 @@ func (s *DefaultTransactionService) CreateFunding(ctx context.Context, user mode
 
 	now := time.Now().UTC()
 	record := model.FundingTransactionRecord{
-		UserID:    user.ID,
-		AccountID: account.ID,
-		Amount:    roundTo2(input.Amount),
-		Currency:  input.Currency,
-		Status:    model.FundingStatusInitiated,
-		Reference: newTransactionReference("FUND", user.ID),
-		CreatedAt: &now,
-		UpdatedAt: &now,
+		UserID:             user.ID,
+		AccountID:          account.ID,
+		Amount:             roundTo2(input.Amount),
+		Currency:           input.Currency,
+		Status:             model.FundingStatusInitiated,
+		StatusSource:       statusSourcePointer(model.TransactionStatusSourceSystem),
+		LastStatusChangeAt: &now,
+		Reference:          newTransactionReference("FUND", user.ID),
+		CreatedAt:          &now,
+		UpdatedAt:          &now,
 	}
 
 	savedRecord, err := s.fundingRepo.CreateFunding(ctx, record)
@@ -48,7 +50,7 @@ func (s *DefaultTransactionService) CreateFunding(ctx context.Context, user mode
 }
 
 func (s *DefaultTransactionService) CreateTransfer(ctx context.Context, user model.AuthenticatedUser, input model.CreateTransferTransactionInput) (model.TransferTransactionResponse, error) {
-	status, err := s.currentVerificationStatus(ctx, user.ID)
+	status, err := s.verification.ResolveForUser(ctx, user.ID)
 	if err != nil {
 		return model.TransferTransactionResponse{}, ErrTransferTransactionsUnavailable
 	}
@@ -73,6 +75,8 @@ func (s *DefaultTransactionService) CreateTransfer(ctx context.Context, user mod
 		DestinationAmount:    destinationAmount,
 		FXRate:               fxRate,
 		Status:               model.TransferStatusInitiated,
+		StatusSource:         statusSourcePointer(model.TransactionStatusSourceSystem),
+		LastStatusChangeAt:   &now,
 		Reference:            newTransactionReference("XFER", user.ID),
 		CreatedAt:            &now,
 		UpdatedAt:            &now,
@@ -90,7 +94,7 @@ func (s *DefaultTransactionService) CreateTransfer(ctx context.Context, user mod
 }
 
 func (s *DefaultTransactionService) CreatePayment(ctx context.Context, user model.AuthenticatedUser, input model.CreatePaymentTransactionInput) (model.PaymentTransactionResponse, error) {
-	status, err := s.currentVerificationStatus(ctx, user.ID)
+	status, err := s.verification.ResolveForUser(ctx, user.ID)
 	if err != nil {
 		return model.PaymentTransactionResponse{}, ErrPaymentTransactionsUnavailable
 	}
@@ -122,6 +126,8 @@ func (s *DefaultTransactionService) CreatePayment(ctx context.Context, user mode
 		FXRate:             fxRate,
 		TotalAmount:        totalAmount,
 		Status:             model.PaymentStatusSubmitted,
+		StatusSource:       statusSourcePointer(model.TransactionStatusSourceSystem),
+		LastStatusChangeAt: &now,
 		Reference:          newTransactionReference("PMT", user.ID),
 		CreatedAt:          &now,
 		UpdatedAt:          &now,

@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"encoding/json"
+	"log/slog"
 
 	"github.com/gfc-app-finance/greencard-mobile/backend/internal/model"
 )
@@ -89,6 +91,27 @@ func (f fakePermissionHelper) CanUseAccount(accountStatus model.AccountStatus) b
 	return f.canUseAccount
 }
 
+type fakeVerificationResolver struct {
+	resolveForUser   func(ctx context.Context, userID string) (model.VerificationStatus, error)
+	normalizeProfile func(profile model.ProfileRecord) model.VerificationStatus
+}
+
+func (f fakeVerificationResolver) ResolveForUser(ctx context.Context, userID string) (model.VerificationStatus, error) {
+	if f.resolveForUser != nil {
+		return f.resolveForUser(ctx, userID)
+	}
+
+	return model.VerificationStatusBasic, nil
+}
+
+func (f fakeVerificationResolver) NormalizeProfile(profile model.ProfileRecord) model.VerificationStatus {
+	if f.normalizeProfile != nil {
+		return f.normalizeProfile(profile)
+	}
+
+	return ResolveVerificationStatus(profile.VerificationStatus, profile)
+}
+
 type fakeProfileRepository struct {
 	getByUserID func(ctx context.Context, userID string) (model.ProfileRecord, bool, error)
 	upsert      func(ctx context.Context, profile model.ProfileRecord) (model.ProfileRecord, error)
@@ -104,6 +127,51 @@ func (f fakeProfileRepository) Upsert(ctx context.Context, profile model.Profile
 	}
 
 	return profile, nil
+}
+
+type fakeIdempotencyRepository struct {
+	create         func(ctx context.Context, record model.IdempotencyRecord) (model.IdempotencyRecord, error)
+	getByKey       func(ctx context.Context, userID, operation, key string) (model.IdempotencyRecord, bool, error)
+	updateResponse func(ctx context.Context, userID, operation, key string, statusCode int, responseBody json.RawMessage) (model.IdempotencyRecord, error)
+	delete         func(ctx context.Context, userID, operation, key string) error
+}
+
+func (f fakeIdempotencyRepository) Create(ctx context.Context, record model.IdempotencyRecord) (model.IdempotencyRecord, error) {
+	if f.create != nil {
+		return f.create(ctx, record)
+	}
+
+	return record, nil
+}
+
+func (f fakeIdempotencyRepository) GetByKey(ctx context.Context, userID, operation, key string) (model.IdempotencyRecord, bool, error) {
+	if f.getByKey != nil {
+		return f.getByKey(ctx, userID, operation, key)
+	}
+
+	return model.IdempotencyRecord{}, false, nil
+}
+
+func (f fakeIdempotencyRepository) UpdateResponse(ctx context.Context, userID, operation, key string, statusCode int, responseBody json.RawMessage) (model.IdempotencyRecord, error) {
+	if f.updateResponse != nil {
+		return f.updateResponse(ctx, userID, operation, key, statusCode, responseBody)
+	}
+
+	return model.IdempotencyRecord{
+		UserID:         userID,
+		Operation:      operation,
+		IdempotencyKey: key,
+		ResponseStatus: &statusCode,
+		ResponseBody:   responseBody,
+	}, nil
+}
+
+func (f fakeIdempotencyRepository) Delete(ctx context.Context, userID, operation, key string) error {
+	if f.delete != nil {
+		return f.delete(ctx, userID, operation, key)
+	}
+
+	return nil
 }
 
 type fakeAccountRepository struct {
@@ -158,18 +226,24 @@ func (f fakeRecipientRepository) GetByIDForUser(ctx context.Context, userID, rec
 }
 
 type fakeTransactionRepository struct {
-	createFunding        func(ctx context.Context, record model.FundingTransactionRecord) (model.FundingTransactionRecord, error)
-	listFunding          func(ctx context.Context, userID string) ([]model.FundingTransactionRecord, error)
-	getFunding           func(ctx context.Context, userID, transactionID string) (model.FundingTransactionRecord, bool, error)
-	updateFundingStatus  func(ctx context.Context, userID, transactionID string, status model.FundingStatus) (model.FundingTransactionRecord, error)
-	createTransfer       func(ctx context.Context, record model.TransferTransactionRecord) (model.TransferTransactionRecord, error)
-	listTransfers        func(ctx context.Context, userID string) ([]model.TransferTransactionRecord, error)
-	getTransfer          func(ctx context.Context, userID, transactionID string) (model.TransferTransactionRecord, bool, error)
-	updateTransferStatus func(ctx context.Context, userID, transactionID string, status model.TransferStatus) (model.TransferTransactionRecord, error)
-	createPayment        func(ctx context.Context, record model.PaymentTransactionRecord) (model.PaymentTransactionRecord, error)
-	listPayments         func(ctx context.Context, userID string) ([]model.PaymentTransactionRecord, error)
-	getPayment           func(ctx context.Context, userID, transactionID string) (model.PaymentTransactionRecord, bool, error)
-	updatePaymentStatus  func(ctx context.Context, userID, transactionID string, status model.PaymentStatus) (model.PaymentTransactionRecord, error)
+	createFunding          func(ctx context.Context, record model.FundingTransactionRecord) (model.FundingTransactionRecord, error)
+	listFunding            func(ctx context.Context, userID string) ([]model.FundingTransactionRecord, error)
+	getFunding             func(ctx context.Context, userID, transactionID string) (model.FundingTransactionRecord, bool, error)
+	getFundingByReference  func(ctx context.Context, reference string) (model.FundingTransactionRecord, bool, error)
+	updateFundingStatus    func(ctx context.Context, userID, transactionID string, payload map[string]any) (model.FundingTransactionRecord, error)
+	completeFunding        func(ctx context.Context, userID, transactionID string, source model.TransactionStatusSource, reason *string) (model.FundingTransactionRecord, error)
+	createTransfer         func(ctx context.Context, record model.TransferTransactionRecord) (model.TransferTransactionRecord, error)
+	listTransfers          func(ctx context.Context, userID string) ([]model.TransferTransactionRecord, error)
+	getTransfer            func(ctx context.Context, userID, transactionID string) (model.TransferTransactionRecord, bool, error)
+	getTransferByReference func(ctx context.Context, reference string) (model.TransferTransactionRecord, bool, error)
+	updateTransferStatus   func(ctx context.Context, userID, transactionID string, payload map[string]any) (model.TransferTransactionRecord, error)
+	completeTransfer       func(ctx context.Context, userID, transactionID string, source model.TransactionStatusSource, reason *string) (model.TransferTransactionRecord, error)
+	createPayment          func(ctx context.Context, record model.PaymentTransactionRecord) (model.PaymentTransactionRecord, error)
+	listPayments           func(ctx context.Context, userID string) ([]model.PaymentTransactionRecord, error)
+	getPayment             func(ctx context.Context, userID, transactionID string) (model.PaymentTransactionRecord, bool, error)
+	getPaymentByReference  func(ctx context.Context, reference string) (model.PaymentTransactionRecord, bool, error)
+	updatePaymentStatus    func(ctx context.Context, userID, transactionID string, payload map[string]any) (model.PaymentTransactionRecord, error)
+	completePayment        func(ctx context.Context, userID, transactionID string, source model.TransactionStatusSource, reason *string) (model.PaymentTransactionRecord, error)
 }
 
 func (f fakeTransactionRepository) CreateFunding(ctx context.Context, record model.FundingTransactionRecord) (model.FundingTransactionRecord, error) {
@@ -196,9 +270,25 @@ func (f fakeTransactionRepository) GetFundingByIDForUser(ctx context.Context, us
 	return model.FundingTransactionRecord{}, false, nil
 }
 
-func (f fakeTransactionRepository) UpdateFundingStatus(ctx context.Context, userID, transactionID string, status model.FundingStatus) (model.FundingTransactionRecord, error) {
+func (f fakeTransactionRepository) GetFundingByReference(ctx context.Context, reference string) (model.FundingTransactionRecord, bool, error) {
+	if f.getFundingByReference != nil {
+		return f.getFundingByReference(ctx, reference)
+	}
+
+	return model.FundingTransactionRecord{}, false, nil
+}
+
+func (f fakeTransactionRepository) UpdateFundingStatus(ctx context.Context, userID, transactionID string, payload map[string]any) (model.FundingTransactionRecord, error) {
 	if f.updateFundingStatus != nil {
-		return f.updateFundingStatus(ctx, userID, transactionID, status)
+		return f.updateFundingStatus(ctx, userID, transactionID, payload)
+	}
+
+	return model.FundingTransactionRecord{}, nil
+}
+
+func (f fakeTransactionRepository) CompleteFunding(ctx context.Context, userID, transactionID string, source model.TransactionStatusSource, reason *string) (model.FundingTransactionRecord, error) {
+	if f.completeFunding != nil {
+		return f.completeFunding(ctx, userID, transactionID, source, reason)
 	}
 
 	return model.FundingTransactionRecord{}, nil
@@ -228,9 +318,25 @@ func (f fakeTransactionRepository) GetTransferByIDForUser(ctx context.Context, u
 	return model.TransferTransactionRecord{}, false, nil
 }
 
-func (f fakeTransactionRepository) UpdateTransferStatus(ctx context.Context, userID, transactionID string, status model.TransferStatus) (model.TransferTransactionRecord, error) {
+func (f fakeTransactionRepository) GetTransferByReference(ctx context.Context, reference string) (model.TransferTransactionRecord, bool, error) {
+	if f.getTransferByReference != nil {
+		return f.getTransferByReference(ctx, reference)
+	}
+
+	return model.TransferTransactionRecord{}, false, nil
+}
+
+func (f fakeTransactionRepository) UpdateTransferStatus(ctx context.Context, userID, transactionID string, payload map[string]any) (model.TransferTransactionRecord, error) {
 	if f.updateTransferStatus != nil {
-		return f.updateTransferStatus(ctx, userID, transactionID, status)
+		return f.updateTransferStatus(ctx, userID, transactionID, payload)
+	}
+
+	return model.TransferTransactionRecord{}, nil
+}
+
+func (f fakeTransactionRepository) CompleteTransfer(ctx context.Context, userID, transactionID string, source model.TransactionStatusSource, reason *string) (model.TransferTransactionRecord, error) {
+	if f.completeTransfer != nil {
+		return f.completeTransfer(ctx, userID, transactionID, source, reason)
 	}
 
 	return model.TransferTransactionRecord{}, nil
@@ -260,9 +366,25 @@ func (f fakeTransactionRepository) GetPaymentByIDForUser(ctx context.Context, us
 	return model.PaymentTransactionRecord{}, false, nil
 }
 
-func (f fakeTransactionRepository) UpdatePaymentStatus(ctx context.Context, userID, transactionID string, status model.PaymentStatus) (model.PaymentTransactionRecord, error) {
+func (f fakeTransactionRepository) GetPaymentByReference(ctx context.Context, reference string) (model.PaymentTransactionRecord, bool, error) {
+	if f.getPaymentByReference != nil {
+		return f.getPaymentByReference(ctx, reference)
+	}
+
+	return model.PaymentTransactionRecord{}, false, nil
+}
+
+func (f fakeTransactionRepository) UpdatePaymentStatus(ctx context.Context, userID, transactionID string, payload map[string]any) (model.PaymentTransactionRecord, error) {
 	if f.updatePaymentStatus != nil {
-		return f.updatePaymentStatus(ctx, userID, transactionID, status)
+		return f.updatePaymentStatus(ctx, userID, transactionID, payload)
+	}
+
+	return model.PaymentTransactionRecord{}, nil
+}
+
+func (f fakeTransactionRepository) CompletePayment(ctx context.Context, userID, transactionID string, source model.TransactionStatusSource, reason *string) (model.PaymentTransactionRecord, error) {
+	if f.completePayment != nil {
+		return f.completePayment(ctx, userID, transactionID, source, reason)
 	}
 
 	return model.PaymentTransactionRecord{}, nil
@@ -284,4 +406,18 @@ func (noopActivityRecorder) RecordPaymentEvent(ctx context.Context, userID strin
 
 func (noopActivityRecorder) RecordSupportTicketCreated(ctx context.Context, userID string, record model.SupportTicketRecord) error {
 	return nil
+}
+
+func testVerificationResolver(status model.VerificationStatus) VerificationResolver {
+	return NewVerificationResolver(slog.New(slog.NewTextHandler(nilWriter{}, nil)), fakeProfileRepository{
+		getByUserID: func(ctx context.Context, userID string) (model.ProfileRecord, bool, error) {
+			return model.ProfileRecord{ID: userID, VerificationStatus: status}, true, nil
+		},
+	})
+}
+
+type nilWriter struct{}
+
+func (nilWriter) Write(p []byte) (n int, err error) {
+	return len(p), nil
 }

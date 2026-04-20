@@ -24,28 +24,28 @@ type RecipientService interface {
 }
 
 type DefaultRecipientService struct {
-	logger      *slog.Logger
-	repository  repository.RecipientRepository
-	profileRepo repository.ProfileRepository
-	permissions PermissionHelper
+	logger       *slog.Logger
+	repository   repository.RecipientRepository
+	permissions  PermissionHelper
+	verification VerificationResolver
 }
 
 func NewRecipientService(
 	logger *slog.Logger,
 	repository repository.RecipientRepository,
-	profileRepo repository.ProfileRepository,
 	permissions PermissionHelper,
+	verification VerificationResolver,
 ) RecipientService {
 	return &DefaultRecipientService{
-		logger:      logger,
-		repository:  repository,
-		profileRepo: profileRepo,
-		permissions: permissions,
+		logger:       logger,
+		repository:   repository,
+		permissions:  permissions,
+		verification: verification,
 	}
 }
 
 func (s *DefaultRecipientService) CreateRecipient(ctx context.Context, user model.AuthenticatedUser, input model.CreateRecipientInput) (model.RecipientResponse, error) {
-	status, err := s.currentVerificationStatus(ctx, user.ID)
+	status, err := s.verification.ResolveForUser(ctx, user.ID)
 	if err != nil {
 		return model.RecipientResponse{}, ErrRecipientsUnavailable
 	}
@@ -108,23 +108,6 @@ func (s *DefaultRecipientService) GetRecipient(ctx context.Context, user model.A
 	}
 
 	return model.RecipientResponse{Recipient: buildRecipient(record)}, nil
-}
-
-func (s *DefaultRecipientService) currentVerificationStatus(ctx context.Context, userID string) (model.VerificationStatus, error) {
-	record, found, err := s.profileRepo.GetByUserID(ctx, userID)
-	if err != nil {
-		s.logger.Error("failed to resolve verification status for recipient", slog.String("user_id", userID), slog.String("error", err.Error()))
-		return "", err
-	}
-
-	if !found {
-		record = model.ProfileRecord{
-			ID:                 userID,
-			VerificationStatus: model.VerificationStatusBasic,
-		}
-	}
-
-	return ResolveVerificationStatus(record.VerificationStatus, record), nil
 }
 
 func validateCreateRecipientInput(userID string, input model.CreateRecipientInput) (model.RecipientRecord, ValidationErrors) {

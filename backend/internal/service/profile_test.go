@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"testing"
 
 	"github.com/gfc-app-finance/greencard-mobile/backend/internal/model"
@@ -38,5 +39,22 @@ func TestValidateUpdateProfileInputRejectsFutureDate(t *testing.T) {
 	_, validationErrors := validateUpdateProfileInput(input)
 	if len(validationErrors) == 0 {
 		t.Fatal("expected future date_of_birth to be rejected")
+	}
+}
+
+func TestVerificationResolverDefaultsMissingProfileToBasic(t *testing.T) {
+	resolver := NewVerificationResolver(nil, fakeProfileRepository{
+		getByUserID: func(ctx context.Context, userID string) (model.ProfileRecord, bool, error) {
+			return model.ProfileRecord{}, false, nil
+		},
+	})
+
+	status, err := resolver.ResolveForUser(context.Background(), "user_123")
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	if status != model.VerificationStatusBasic {
+		t.Fatalf("expected basic verification status, got %q", status)
 	}
 }

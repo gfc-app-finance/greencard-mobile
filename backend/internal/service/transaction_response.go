@@ -15,11 +15,14 @@ func buildFundingTransaction(record model.FundingTransactionRecord) model.Fundin
 			Value:    roundTo2(record.Amount),
 			Currency: record.Currency,
 		},
-		Status:    record.Status,
-		Reference: record.Reference,
-		CreatedAt: record.CreatedAt,
-		UpdatedAt: record.UpdatedAt,
-		Timeline:  fundingTimeline(record),
+		Status:             record.Status,
+		StatusReason:       copyOptionalString(record.StatusReason),
+		StatusSource:       copyOptionalStatusSource(record.StatusSource),
+		LastStatusChangeAt: copyOptionalTime(record.LastStatusChangeAt),
+		Reference:          record.Reference,
+		CreatedAt:          record.CreatedAt,
+		UpdatedAt:          record.UpdatedAt,
+		Timeline:           fundingTimeline(record),
 	}
 }
 
@@ -37,12 +40,15 @@ func buildTransferTransaction(record model.TransferTransactionRecord) model.Tran
 			Value:    roundTo2(record.DestinationAmount),
 			Currency: record.DestinationCurrency,
 		},
-		FXRate:    record.FXRate,
-		Status:    record.Status,
-		Reference: record.Reference,
-		CreatedAt: record.CreatedAt,
-		UpdatedAt: record.UpdatedAt,
-		Timeline:  transferTimeline(record),
+		FXRate:             record.FXRate,
+		Status:             record.Status,
+		StatusReason:       copyOptionalString(record.StatusReason),
+		StatusSource:       copyOptionalStatusSource(record.StatusSource),
+		LastStatusChangeAt: copyOptionalTime(record.LastStatusChangeAt),
+		Reference:          record.Reference,
+		CreatedAt:          record.CreatedAt,
+		UpdatedAt:          record.UpdatedAt,
+		Timeline:           transferTimeline(record),
 	}
 }
 
@@ -67,16 +73,19 @@ func buildPaymentTransaction(record model.PaymentTransactionRecord) model.Paymen
 			Value:    roundTo2(record.TotalAmount),
 			Currency: record.Currency,
 		},
-		Status:    record.Status,
-		Reference: record.Reference,
-		CreatedAt: record.CreatedAt,
-		UpdatedAt: record.UpdatedAt,
-		Timeline:  paymentTimeline(record),
+		Status:             record.Status,
+		StatusReason:       copyOptionalString(record.StatusReason),
+		StatusSource:       copyOptionalStatusSource(record.StatusSource),
+		LastStatusChangeAt: copyOptionalTime(record.LastStatusChangeAt),
+		Reference:          record.Reference,
+		CreatedAt:          record.CreatedAt,
+		UpdatedAt:          record.UpdatedAt,
+		Timeline:           paymentTimeline(record),
 	}
 }
 
 func fundingTimeline(record model.FundingTransactionRecord) []model.TransactionStepState {
-	stepTimes := timelineStepTimes(record.CreatedAt, record.UpdatedAt, 3)
+	stepTimes := timelineStepTimes(record.CreatedAt, coalesceStatusChangeTime(record.LastStatusChangeAt, record.UpdatedAt), 3)
 	if record.Status == model.FundingStatusFailed {
 		return []model.TransactionStepState{
 			{Code: "initiated", Label: "Initiated", IsCompleted: true, UpdatedAt: stepTimes[0]},
@@ -92,7 +101,7 @@ func fundingTimeline(record model.FundingTransactionRecord) []model.TransactionS
 }
 
 func transferTimeline(record model.TransferTransactionRecord) []model.TransactionStepState {
-	stepTimes := timelineStepTimes(record.CreatedAt, record.UpdatedAt, 3)
+	stepTimes := timelineStepTimes(record.CreatedAt, coalesceStatusChangeTime(record.LastStatusChangeAt, record.UpdatedAt), 3)
 	if record.Status == model.TransferStatusFailed {
 		return []model.TransactionStepState{
 			{Code: "initiated", Label: "Initiated", IsCompleted: true, UpdatedAt: stepTimes[0]},
@@ -108,7 +117,7 @@ func transferTimeline(record model.TransferTransactionRecord) []model.Transactio
 }
 
 func paymentTimeline(record model.PaymentTransactionRecord) []model.TransactionStepState {
-	stepTimes := timelineStepTimes(record.CreatedAt, record.UpdatedAt, 4)
+	stepTimes := timelineStepTimes(record.CreatedAt, coalesceStatusChangeTime(record.LastStatusChangeAt, record.UpdatedAt), 4)
 	if record.Status == model.PaymentStatusFailed {
 		return []model.TransactionStepState{
 			{Code: "submitted", Label: "Submitted", IsCompleted: true, UpdatedAt: stepTimes[0]},
@@ -171,6 +180,24 @@ func paymentProgressIndex(status model.PaymentStatus) int {
 	}
 }
 
+func copyOptionalStatusSource(value *model.TransactionStatusSource) *model.TransactionStatusSource {
+	if value == nil {
+		return nil
+	}
+
+	copy := *value
+	return &copy
+}
+
+func copyOptionalTime(value *time.Time) *time.Time {
+	if value == nil {
+		return nil
+	}
+
+	copy := *value
+	return &copy
+}
+
 func timelineStepTimes(createdAt, updatedAt *time.Time, count int) []*time.Time {
 	steps := make([]*time.Time, count)
 	if createdAt == nil {
@@ -194,6 +221,14 @@ func timelineStepTimes(createdAt, updatedAt *time.Time, count int) []*time.Time 
 	}
 
 	return steps
+}
+
+func coalesceStatusChangeTime(lastStatusChangeAt, updatedAt *time.Time) *time.Time {
+	if lastStatusChangeAt != nil {
+		return lastStatusChangeAt
+	}
+
+	return updatedAt
 }
 
 func recipientDisplayLabel(recipient model.RecipientRecord) string {

@@ -17,30 +17,59 @@ type Config struct {
 	Version  string
 	Port     string
 	LogLevel string
+	Features FeatureFlags
 	Supabase SupabaseConfig
+	Webhooks WebhookConfig
+	Worker   WorkerConfig
 	HTTP     HTTPConfig
 }
 
+type FeatureFlags struct {
+	EnableSeededAccountFallback bool
+	EnableTransactionSimulation bool
+}
+
 type SupabaseConfig struct {
-	URL                 string
-	ServiceRoleKey      string
-	PublishableKey      string
-	Issuer              string
-	JWKSURL             string
-	UserInfoURL         string
-	AuthTimeout         time.Duration
-	JWKSCacheTTL        time.Duration
-	RESTURL             string
-	RESTTimeout         time.Duration
-	ProfileTable        string
-	AccountTable        string
-	ActivityTable       string
-	FundingTable        string
-	TransferTable       string
-	PaymentTable        string
-	RecipientTable      string
-	SupportTicketTable  string
-	SupportMessageTable string
+	URL                  string
+	ServiceRoleKey       string
+	PublishableKey       string
+	Issuer               string
+	JWKSURL              string
+	UserInfoURL          string
+	AuthTimeout          time.Duration
+	JWKSCacheTTL         time.Duration
+	RESTURL              string
+	RESTTimeout          time.Duration
+	ProfileTable         string
+	AccountTable         string
+	ActivityTable        string
+	BalanceMovementTable string
+	WebhookEventTable    string
+	FundingTable         string
+	TransferTable        string
+	PaymentTable         string
+	IdempotencyTable     string
+	RecipientTable       string
+	SupportTicketTable   string
+	SupportMessageTable  string
+}
+
+type WebhookConfig struct {
+	SandboxPaySecret   string
+	SignatureTolerance time.Duration
+}
+
+type WorkerConfig struct {
+	Enabled                     bool
+	EnableSimulationProgression bool
+	PollInterval                time.Duration
+	BatchSize                   int
+	RetryEvaluationAge          time.Duration
+	FundingPendingTimeout       time.Duration
+	TransferConvertingTimeout   time.Duration
+	PaymentSubmittedTimeout     time.Duration
+	PaymentUnderReviewTimeout   time.Duration
+	PaymentProcessingTimeout    time.Duration
 }
 
 type HTTPConfig struct {
@@ -59,19 +88,29 @@ func Load() (Config, error) {
 		Version:  getEnv("APP_VERSION", "dev"),
 		Port:     getEnv("PORT", "8080"),
 		LogLevel: getEnv("LOG_LEVEL", "info"),
+		Features: FeatureFlags{
+			EnableSeededAccountFallback: getBoolEnv("ENABLE_SEEDED_ACCOUNT_FALLBACK", false),
+			EnableTransactionSimulation: getBoolEnv("ENABLE_TRANSACTION_SIMULATION", cfgDefaultTransactionSimulation(getEnv("APP_ENV", "development"))),
+		},
 		Supabase: SupabaseConfig{
-			URL:                 strings.TrimSpace(os.Getenv("SUPABASE_URL")),
-			ServiceRoleKey:      strings.TrimSpace(os.Getenv("SUPABASE_SERVICE_ROLE_KEY")),
-			PublishableKey:      strings.TrimSpace(os.Getenv("SUPABASE_PUBLISHABLE_KEY")),
-			ProfileTable:        getEnv("SUPABASE_PROFILE_TABLE", "profiles"),
-			AccountTable:        getEnv("SUPABASE_ACCOUNT_TABLE", "accounts"),
-			ActivityTable:       getEnv("SUPABASE_ACTIVITY_TABLE", "activities"),
-			FundingTable:        getEnv("SUPABASE_FUNDING_TABLE", "funding_transactions"),
-			TransferTable:       getEnv("SUPABASE_TRANSFER_TABLE", "transfer_transactions"),
-			PaymentTable:        getEnv("SUPABASE_PAYMENT_TABLE", "payment_transactions"),
-			RecipientTable:      getEnv("SUPABASE_RECIPIENT_TABLE", "recipients"),
-			SupportTicketTable:  getEnv("SUPABASE_SUPPORT_TICKET_TABLE", "support_tickets"),
-			SupportMessageTable: getEnv("SUPABASE_SUPPORT_MESSAGE_TABLE", "support_ticket_messages"),
+			URL:                  strings.TrimSpace(os.Getenv("SUPABASE_URL")),
+			ServiceRoleKey:       strings.TrimSpace(os.Getenv("SUPABASE_SERVICE_ROLE_KEY")),
+			PublishableKey:       strings.TrimSpace(os.Getenv("SUPABASE_PUBLISHABLE_KEY")),
+			ProfileTable:         getEnv("SUPABASE_PROFILE_TABLE", "profiles"),
+			AccountTable:         getEnv("SUPABASE_ACCOUNT_TABLE", "accounts"),
+			ActivityTable:        getEnv("SUPABASE_ACTIVITY_TABLE", "activities"),
+			BalanceMovementTable: getEnv("SUPABASE_BALANCE_MOVEMENT_TABLE", "account_balance_movements"),
+			WebhookEventTable:    getEnv("SUPABASE_WEBHOOK_EVENT_TABLE", "provider_webhook_events"),
+			FundingTable:         getEnv("SUPABASE_FUNDING_TABLE", "funding_transactions"),
+			TransferTable:        getEnv("SUPABASE_TRANSFER_TABLE", "transfer_transactions"),
+			PaymentTable:         getEnv("SUPABASE_PAYMENT_TABLE", "payment_transactions"),
+			IdempotencyTable:     getEnv("SUPABASE_IDEMPOTENCY_TABLE", "idempotency_keys"),
+			RecipientTable:       getEnv("SUPABASE_RECIPIENT_TABLE", "recipients"),
+			SupportTicketTable:   getEnv("SUPABASE_SUPPORT_TICKET_TABLE", "support_tickets"),
+			SupportMessageTable:  getEnv("SUPABASE_SUPPORT_MESSAGE_TABLE", "support_ticket_messages"),
+		},
+		Webhooks: WebhookConfig{
+			SandboxPaySecret: strings.TrimSpace(os.Getenv("WEBHOOK_SANDBOXPAY_SECRET")),
 		},
 	}
 
@@ -110,6 +149,51 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 
+	webhookSignatureTolerance, err := parseDurationEnv("WEBHOOK_SIGNATURE_TOLERANCE", 5*time.Minute)
+	if err != nil {
+		return Config{}, err
+	}
+
+	workerPollInterval, err := parseDurationEnv("WORKER_POLL_INTERVAL", 15*time.Second)
+	if err != nil {
+		return Config{}, err
+	}
+
+	workerBatchSize, err := parsePositiveIntEnv("WORKER_BATCH_SIZE", 100)
+	if err != nil {
+		return Config{}, err
+	}
+
+	workerRetryEvaluationAge, err := parseDurationEnv("WORKER_RETRY_EVALUATION_AGE", 2*time.Minute)
+	if err != nil {
+		return Config{}, err
+	}
+
+	fundingPendingTimeout, err := parseDurationEnv("WORKER_FUNDING_PENDING_TIMEOUT", 15*time.Minute)
+	if err != nil {
+		return Config{}, err
+	}
+
+	transferConvertingTimeout, err := parseDurationEnv("WORKER_TRANSFER_CONVERTING_TIMEOUT", 20*time.Minute)
+	if err != nil {
+		return Config{}, err
+	}
+
+	paymentSubmittedTimeout, err := parseDurationEnv("WORKER_PAYMENT_SUBMITTED_TIMEOUT", 10*time.Minute)
+	if err != nil {
+		return Config{}, err
+	}
+
+	paymentUnderReviewTimeout, err := parseDurationEnv("WORKER_PAYMENT_UNDER_REVIEW_TIMEOUT", 20*time.Minute)
+	if err != nil {
+		return Config{}, err
+	}
+
+	paymentProcessingTimeout, err := parseDurationEnv("WORKER_PAYMENT_PROCESSING_TIMEOUT", 30*time.Minute)
+	if err != nil {
+		return Config{}, err
+	}
+
 	cfg.HTTP = HTTPConfig{
 		ReadTimeout:     readTimeout,
 		WriteTimeout:    writeTimeout,
@@ -126,6 +210,19 @@ func Load() (Config, error) {
 	cfg.Supabase.AuthTimeout = authTimeout
 	cfg.Supabase.JWKSCacheTTL = jwksCacheTTL
 	cfg.Supabase.RESTTimeout = restTimeout
+	cfg.Webhooks.SignatureTolerance = webhookSignatureTolerance
+	cfg.Worker = WorkerConfig{
+		Enabled:                     getBoolEnv("WORKER_ENABLED", cfgDefaultWorkerEnabled(cfg.Env)),
+		EnableSimulationProgression: getBoolEnv("WORKER_ENABLE_SIMULATION_PROGRESSION", cfg.Features.EnableTransactionSimulation),
+		PollInterval:                workerPollInterval,
+		BatchSize:                   workerBatchSize,
+		RetryEvaluationAge:          workerRetryEvaluationAge,
+		FundingPendingTimeout:       fundingPendingTimeout,
+		TransferConvertingTimeout:   transferConvertingTimeout,
+		PaymentSubmittedTimeout:     paymentSubmittedTimeout,
+		PaymentUnderReviewTimeout:   paymentUnderReviewTimeout,
+		PaymentProcessingTimeout:    paymentProcessingTimeout,
+	}
 
 	if err := validate(cfg); err != nil {
 		return Config{}, err
@@ -173,6 +270,14 @@ func validate(cfg Config) error {
 		return fmt.Errorf("invalid APP_ENV %q", cfg.Env)
 	}
 
+	if cfg.Env == "production" && cfg.Features.EnableTransactionSimulation {
+		return errors.New("ENABLE_TRANSACTION_SIMULATION cannot be enabled in production")
+	}
+
+	if cfg.Env == "production" && cfg.Worker.EnableSimulationProgression {
+		return errors.New("WORKER_ENABLE_SIMULATION_PROGRESSION cannot be enabled in production")
+	}
+
 	if !isAllowedValue(strings.ToLower(cfg.LogLevel), "debug", "info", "warn", "error") {
 		return fmt.Errorf("invalid LOG_LEVEL %q", cfg.LogLevel)
 	}
@@ -190,6 +295,21 @@ func validate(cfg Config) error {
 		return errors.New("supabase auth timeout values must be greater than zero")
 	}
 
+	if cfg.Webhooks.SignatureTolerance <= 0 {
+		return errors.New("webhook signature tolerance must be greater than zero")
+	}
+
+	if cfg.Worker.PollInterval <= 0 ||
+		cfg.Worker.BatchSize <= 0 ||
+		cfg.Worker.RetryEvaluationAge <= 0 ||
+		cfg.Worker.FundingPendingTimeout <= 0 ||
+		cfg.Worker.TransferConvertingTimeout <= 0 ||
+		cfg.Worker.PaymentSubmittedTimeout <= 0 ||
+		cfg.Worker.PaymentUnderReviewTimeout <= 0 ||
+		cfg.Worker.PaymentProcessingTimeout <= 0 {
+		return errors.New("worker configuration values must be greater than zero")
+	}
+
 	if !isSafeIdentifier(cfg.Supabase.ProfileTable) {
 		return fmt.Errorf("invalid SUPABASE_PROFILE_TABLE %q", cfg.Supabase.ProfileTable)
 	}
@@ -202,6 +322,14 @@ func validate(cfg Config) error {
 		return fmt.Errorf("invalid SUPABASE_ACTIVITY_TABLE %q", cfg.Supabase.ActivityTable)
 	}
 
+	if !isSafeIdentifier(cfg.Supabase.BalanceMovementTable) {
+		return fmt.Errorf("invalid SUPABASE_BALANCE_MOVEMENT_TABLE %q", cfg.Supabase.BalanceMovementTable)
+	}
+
+	if !isSafeIdentifier(cfg.Supabase.WebhookEventTable) {
+		return fmt.Errorf("invalid SUPABASE_WEBHOOK_EVENT_TABLE %q", cfg.Supabase.WebhookEventTable)
+	}
+
 	if !isSafeIdentifier(cfg.Supabase.FundingTable) {
 		return fmt.Errorf("invalid SUPABASE_FUNDING_TABLE %q", cfg.Supabase.FundingTable)
 	}
@@ -212,6 +340,10 @@ func validate(cfg Config) error {
 
 	if !isSafeIdentifier(cfg.Supabase.PaymentTable) {
 		return fmt.Errorf("invalid SUPABASE_PAYMENT_TABLE %q", cfg.Supabase.PaymentTable)
+	}
+
+	if !isSafeIdentifier(cfg.Supabase.IdempotencyTable) {
+		return fmt.Errorf("invalid SUPABASE_IDEMPOTENCY_TABLE %q", cfg.Supabase.IdempotencyTable)
 	}
 
 	if !isSafeIdentifier(cfg.Supabase.RecipientTable) {
@@ -250,6 +382,54 @@ func getEnv(key, defaultValue string) string {
 	}
 
 	return value
+}
+
+func getBoolEnv(key string, defaultValue bool) bool {
+	value := strings.TrimSpace(strings.ToLower(os.Getenv(key)))
+	if value == "" {
+		return defaultValue
+	}
+
+	switch value {
+	case "1", "true", "yes", "on":
+		return true
+	case "0", "false", "no", "off":
+		return false
+	default:
+		return defaultValue
+	}
+}
+
+func parsePositiveIntEnv(key string, defaultValue int) (int, error) {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return defaultValue, nil
+	}
+
+	value, err := strconv.Atoi(raw)
+	if err != nil || value <= 0 {
+		return 0, fmt.Errorf("invalid %s integer %q", key, raw)
+	}
+
+	return value, nil
+}
+
+func cfgDefaultTransactionSimulation(env string) bool {
+	switch strings.TrimSpace(strings.ToLower(env)) {
+	case "production":
+		return false
+	default:
+		return true
+	}
+}
+
+func cfgDefaultWorkerEnabled(env string) bool {
+	switch strings.TrimSpace(strings.ToLower(env)) {
+	case "staging", "production":
+		return true
+	default:
+		return false
+	}
 }
 
 func isAllowedValue(value string, allowed ...string) bool {

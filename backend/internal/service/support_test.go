@@ -21,11 +21,6 @@ func TestValidateCreateSupportMessageInputRejectsClosedTicket(t *testing.T) {
 
 func TestDefaultSupportServiceCreateTicketDeniedByPermission(t *testing.T) {
 	service := &DefaultSupportService{
-		profileRepo: fakeProfileRepository{
-			getByUserID: func(ctx context.Context, userID string) (model.ProfileRecord, bool, error) {
-				return model.ProfileRecord{ID: userID, VerificationStatus: model.VerificationStatusBasic}, true, nil
-			},
-		},
 		ticketRepo: fakeSupportTicketRepository{
 			createTicket: func(ctx context.Context, record model.SupportTicketRecord) (model.SupportTicketRecord, error) {
 				return model.SupportTicketRecord{}, errors.New("should not be called")
@@ -34,6 +29,7 @@ func TestDefaultSupportServiceCreateTicketDeniedByPermission(t *testing.T) {
 		permissions: fakePermissionHelper{
 			canCreateSupportTicket: false,
 		},
+		verification: testVerificationResolver(model.VerificationStatusBasic),
 	}
 
 	_, err := service.CreateTicket(context.Background(), model.AuthenticatedUser{ID: "user_123"}, model.CreateSupportTicketInput{

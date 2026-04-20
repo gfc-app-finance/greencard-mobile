@@ -76,3 +76,25 @@ func roundTo2(value float64) float64 {
 func timePointer(value time.Time) *time.Time {
 	return &value
 }
+
+func statusSourcePointer(value model.TransactionStatusSource) *model.TransactionStatusSource {
+	if !value.IsValid() {
+		return nil
+	}
+
+	copy := value
+	return &copy
+}
+
+func normalizeStatusReason(reason *string) *string {
+	if reason == nil {
+		return nil
+	}
+
+	value := strings.TrimSpace(*reason)
+	if value == "" {
+		return nil
+	}
+
+	return &value
+}

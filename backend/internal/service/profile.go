@@ -35,16 +35,18 @@ type ProfileService interface {
 }
 
 type DefaultProfileService struct {
-	logger      *slog.Logger
-	repository  repository.ProfileRepository
-	permissions PermissionHelper
+	logger       *slog.Logger
+	repository   repository.ProfileRepository
+	permissions  PermissionHelper
+	verification VerificationResolver
 }
 
-func NewProfileService(logger *slog.Logger, repository repository.ProfileRepository, permissions PermissionHelper) ProfileService {
+func NewProfileService(logger *slog.Logger, repository repository.ProfileRepository, permissions PermissionHelper, verification VerificationResolver) ProfileService {
 	return &DefaultProfileService{
-		logger:      logger,
-		repository:  repository,
-		permissions: permissions,
+		logger:       logger,
+		repository:   repository,
+		permissions:  permissions,
+		verification: verification,
 	}
 }
 
@@ -62,7 +64,7 @@ func (s *DefaultProfileService) GetCurrentProfile(ctx context.Context, user mode
 		}
 	}
 
-	record.VerificationStatus = ResolveVerificationStatus(record.VerificationStatus, record)
+	record.VerificationStatus = s.verification.NormalizeProfile(record)
 
 	return buildProfileResponse(user, record, s.permissions), nil
 }
@@ -88,7 +90,16 @@ func (s *DefaultProfileService) UpdateCurrentProfile(ctx context.Context, user m
 
 	mergedRecord := mergeProfileRecord(record, input)
 	mergedRecord.ID = user.ID
-	mergedRecord.VerificationStatus = ResolveVerificationStatus(record.VerificationStatus, mergedRecord)
+	mergedRecord.VerificationStatus = s.verification.NormalizeProfile(model.ProfileRecord{
+		ID:                 mergedRecord.ID,
+		FullName:           mergedRecord.FullName,
+		DateOfBirth:        mergedRecord.DateOfBirth,
+		ResidentialAddress: mergedRecord.ResidentialAddress,
+		Nationality:        mergedRecord.Nationality,
+		VerificationStatus: record.VerificationStatus,
+		CreatedAt:          mergedRecord.CreatedAt,
+		UpdatedAt:          mergedRecord.UpdatedAt,
+	})
 
 	savedRecord, err := s.repository.Upsert(ctx, mergedRecord)
 	if err != nil {
@@ -96,7 +107,7 @@ func (s *DefaultProfileService) UpdateCurrentProfile(ctx context.Context, user m
 		return model.CurrentUserProfileResponse{}, ErrProfileUnavailable
 	}
 
-	savedRecord.VerificationStatus = ResolveVerificationStatus(savedRecord.VerificationStatus, savedRecord)
+	savedRecord.VerificationStatus = s.verification.NormalizeProfile(savedRecord)
 
 	return buildProfileResponse(user, savedRecord, s.permissions), nil
 }

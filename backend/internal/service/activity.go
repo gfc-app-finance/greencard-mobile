@@ -34,18 +34,21 @@ type DefaultActivityService struct {
 	repository      repository.ActivityRepository
 	accountRepo     repository.AccountRepository
 	accountSeedData AccountSeedProvider
+	allowSeeded     bool
 }
 
 func NewActivityService(
 	logger *slog.Logger,
 	repository repository.ActivityRepository,
 	accountRepo repository.AccountRepository,
+	allowSeededFallback bool,
 ) ActivityService {
 	return &DefaultActivityService{
 		logger:          logger,
 		repository:      repository,
 		accountRepo:     accountRepo,
 		accountSeedData: NewSeededAccountProvider(),
+		allowSeeded:     allowSeededFallback,
 	}
 }
 
@@ -248,12 +251,14 @@ func (s *DefaultActivityService) accountLabel(ctx context.Context, userID, accou
 		}
 	}
 
-	if seeded, found := s.accountSeedData.GetByIDForUser(userID, accountID); found {
-		if label := strings.TrimSpace(seeded.DisplayName); label != "" {
-			return label
-		}
-		if seeded.Currency.IsValid() {
-			return "Personal " + string(seeded.Currency)
+	if s.allowSeeded {
+		if seeded, found := s.accountSeedData.GetByIDForUser(userID, accountID); found {
+			if label := strings.TrimSpace(seeded.DisplayName); label != "" {
+				return label
+			}
+			if seeded.Currency.IsValid() {
+				return "Personal " + string(seeded.Currency)
+			}
 		}
 	}
 

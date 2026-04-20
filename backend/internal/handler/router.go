@@ -16,9 +16,12 @@ func NewRouter(
 	profileService service.ProfileService,
 	accountService service.AccountService,
 	transactionService service.TransactionService,
+	idempotencyService service.IdempotencyService,
+	webhookService service.WebhookService,
 	activityService service.ActivityService,
 	recipientService service.RecipientService,
 	supportService service.SupportService,
+	enableTransactionSimulation bool,
 ) http.Handler {
 	publicMux := http.NewServeMux()
 	protectedMux := http.NewServeMux()
@@ -28,12 +31,14 @@ func NewRouter(
 	authSessionHandler := NewAuthSessionHandler(logger)
 	profileHandler := NewProfileHandler(logger, profileService)
 	accountHandler := NewAccountHandler(logger, accountService)
-	transactionHandler := NewTransactionHandler(logger, transactionService)
+	transactionHandler := NewTransactionHandler(logger, transactionService, idempotencyService)
+	webhookHandler := NewWebhookHandler(logger, webhookService)
 	activityHandler := NewActivityHandler(logger, activityService)
 	recipientHandler := NewRecipientHandler(logger, recipientService)
 	supportHandler := NewSupportHandler(logger, supportService)
 
 	publicMux.HandleFunc("GET /health", healthHandler.Get)
+	publicMux.HandleFunc("POST /webhooks/providers/{provider}", webhookHandler.HandleProviderEvent)
 	protectedMux.HandleFunc("GET /auth/session", authSessionHandler.Get)
 	protectedMux.HandleFunc("GET /profile", profileHandler.Get)
 	protectedMux.HandleFunc("PATCH /profile", profileHandler.Patch)
@@ -58,6 +63,11 @@ func NewRouter(
 	protectedMux.HandleFunc("POST /transactions/payments", transactionHandler.CreatePayment)
 	protectedMux.HandleFunc("GET /transactions/payments", transactionHandler.ListPayments)
 	protectedMux.HandleFunc("GET /transactions/payments/{id}", transactionHandler.GetPayment)
+	if enableTransactionSimulation {
+		protectedMux.HandleFunc("POST /transactions/funding/{id}/simulate/advance", transactionHandler.SimulateAdvanceFunding)
+		protectedMux.HandleFunc("POST /transactions/transfers/{id}/simulate/advance", transactionHandler.SimulateAdvanceTransfer)
+		protectedMux.HandleFunc("POST /transactions/payments/{id}/simulate/advance", transactionHandler.SimulateAdvancePayment)
+	}
 	rootMux.Handle("/", withJSONNotFound(publicMux))
 	rootMux.Handle(
 		"/v1/",
