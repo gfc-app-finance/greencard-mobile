@@ -41,16 +41,16 @@ type AccountBalance struct {
 }
 
 type Account struct {
-	ID               string         `json:"id"`
+	ID               string          `json:"id"`
 	Currency         AccountCurrency `json:"currency"`
-	AccountType      string         `json:"account_type"`
-	DisplayName      string         `json:"display_name"`
-	MaskedIdentifier string         `json:"masked_identifier,omitempty"`
-	Provider         string         `json:"provider,omitempty"`
-	Status           AccountStatus  `json:"status"`
-	Balance          AccountBalance `json:"balance"`
-	CreatedAt        *time.Time     `json:"created_at,omitempty"`
-	UpdatedAt        *time.Time     `json:"updated_at,omitempty"`
+	AccountType      string          `json:"account_type"`
+	DisplayName      string          `json:"display_name"`
+	MaskedIdentifier string          `json:"masked_identifier,omitempty"`
+	Provider         string          `json:"provider,omitempty"`
+	Status           AccountStatus   `json:"status"`
+	Balance          AccountBalance  `json:"balance"`
+	CreatedAt        *time.Time      `json:"created_at,omitempty"`
+	UpdatedAt        *time.Time      `json:"updated_at,omitempty"`
 }
 
 type AccountListResponse struct {

@@ -22,24 +22,24 @@ type Config struct {
 }
 
 type SupabaseConfig struct {
-	URL            string
-	ServiceRoleKey string
-	PublishableKey string
-	Issuer         string
-	JWKSURL        string
-	UserInfoURL    string
-	AuthTimeout    time.Duration
-	JWKSCacheTTL   time.Duration
-	RESTURL        string
-	RESTTimeout    time.Duration
-	ProfileTable   string
-	AccountTable   string
-	ActivityTable  string
-	FundingTable   string
-	TransferTable  string
-	PaymentTable   string
-	RecipientTable string
-	SupportTicketTable string
+	URL                 string
+	ServiceRoleKey      string
+	PublishableKey      string
+	Issuer              string
+	JWKSURL             string
+	UserInfoURL         string
+	AuthTimeout         time.Duration
+	JWKSCacheTTL        time.Duration
+	RESTURL             string
+	RESTTimeout         time.Duration
+	ProfileTable        string
+	AccountTable        string
+	ActivityTable       string
+	FundingTable        string
+	TransferTable       string
+	PaymentTable        string
+	RecipientTable      string
+	SupportTicketTable  string
 	SupportMessageTable string
 }
 
@@ -60,17 +60,17 @@ func Load() (Config, error) {
 		Port:     getEnv("PORT", "8080"),
 		LogLevel: getEnv("LOG_LEVEL", "info"),
 		Supabase: SupabaseConfig{
-			URL:            strings.TrimSpace(os.Getenv("SUPABASE_URL")),
-			ServiceRoleKey: strings.TrimSpace(os.Getenv("SUPABASE_SERVICE_ROLE_KEY")),
-			PublishableKey: strings.TrimSpace(os.Getenv("SUPABASE_PUBLISHABLE_KEY")),
-			ProfileTable:   getEnv("SUPABASE_PROFILE_TABLE", "profiles"),
-			AccountTable:   getEnv("SUPABASE_ACCOUNT_TABLE", "accounts"),
-			ActivityTable:  getEnv("SUPABASE_ACTIVITY_TABLE", "activities"),
-			FundingTable:   getEnv("SUPABASE_FUNDING_TABLE", "funding_transactions"),
-			TransferTable:  getEnv("SUPABASE_TRANSFER_TABLE", "transfer_transactions"),
-			PaymentTable:   getEnv("SUPABASE_PAYMENT_TABLE", "payment_transactions"),
-			RecipientTable: getEnv("SUPABASE_RECIPIENT_TABLE", "recipients"),
-			SupportTicketTable: getEnv("SUPABASE_SUPPORT_TICKET_TABLE", "support_tickets"),
+			URL:                 strings.TrimSpace(os.Getenv("SUPABASE_URL")),
+			ServiceRoleKey:      strings.TrimSpace(os.Getenv("SUPABASE_SERVICE_ROLE_KEY")),
+			PublishableKey:      strings.TrimSpace(os.Getenv("SUPABASE_PUBLISHABLE_KEY")),
+			ProfileTable:        getEnv("SUPABASE_PROFILE_TABLE", "profiles"),
+			AccountTable:        getEnv("SUPABASE_ACCOUNT_TABLE", "accounts"),
+			ActivityTable:       getEnv("SUPABASE_ACTIVITY_TABLE", "activities"),
+			FundingTable:        getEnv("SUPABASE_FUNDING_TABLE", "funding_transactions"),
+			TransferTable:       getEnv("SUPABASE_TRANSFER_TABLE", "transfer_transactions"),
+			PaymentTable:        getEnv("SUPABASE_PAYMENT_TABLE", "payment_transactions"),
+			RecipientTable:      getEnv("SUPABASE_RECIPIENT_TABLE", "recipients"),
+			SupportTicketTable:  getEnv("SUPABASE_SUPPORT_TICKET_TABLE", "support_tickets"),
 			SupportMessageTable: getEnv("SUPABASE_SUPPORT_MESSAGE_TABLE", "support_ticket_messages"),
 		},
 	}

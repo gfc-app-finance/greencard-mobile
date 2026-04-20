@@ -5,13 +5,13 @@ import "time"
 type SupportIssueType string
 
 const (
-	SupportIssueTypePaymentFailed SupportIssueType = "payment_failed"
+	SupportIssueTypePaymentFailed  SupportIssueType = "payment_failed"
 	SupportIssueTypeDelayedPayment SupportIssueType = "delayed_payment"
-	SupportIssueTypeTransferIssue SupportIssueType = "transfer_issue"
-	SupportIssueTypeFundingIssue  SupportIssueType = "funding_issue"
-	SupportIssueTypeAccountIssue  SupportIssueType = "account_issue"
-	SupportIssueTypeCardIssue     SupportIssueType = "card_issue"
-	SupportIssueTypeOther         SupportIssueType = "other"
+	SupportIssueTypeTransferIssue  SupportIssueType = "transfer_issue"
+	SupportIssueTypeFundingIssue   SupportIssueType = "funding_issue"
+	SupportIssueTypeAccountIssue   SupportIssueType = "account_issue"
+	SupportIssueTypeCardIssue      SupportIssueType = "card_issue"
+	SupportIssueTypeOther          SupportIssueType = "other"
 )
 
 type SupportTicketStatus string
@@ -39,17 +39,17 @@ const (
 )
 
 type SupportTicketRecord struct {
-	ID               string                  `json:"id"`
-	UserID           string                  `json:"user_id"`
-	Title            string                  `json:"title"`
-	IssueType        SupportIssueType        `json:"issue_type"`
-	Description      string                  `json:"description"`
-	Status           SupportTicketStatus     `json:"status"`
-	LinkedEntityType *LinkedEntityType       `json:"linked_entity_type,omitempty"`
-	LinkedEntityID   *string                 `json:"linked_entity_id,omitempty"`
-	Priority         *SupportTicketPriority  `json:"priority,omitempty"`
-	CreatedAt        *time.Time              `json:"created_at,omitempty"`
-	UpdatedAt        *time.Time              `json:"updated_at,omitempty"`
+	ID               string                 `json:"id"`
+	UserID           string                 `json:"user_id"`
+	Title            string                 `json:"title"`
+	IssueType        SupportIssueType       `json:"issue_type"`
+	Description      string                 `json:"description"`
+	Status           SupportTicketStatus    `json:"status"`
+	LinkedEntityType *LinkedEntityType      `json:"linked_entity_type,omitempty"`
+	LinkedEntityID   *string                `json:"linked_entity_id,omitempty"`
+	Priority         *SupportTicketPriority `json:"priority,omitempty"`
+	CreatedAt        *time.Time             `json:"created_at,omitempty"`
+	UpdatedAt        *time.Time             `json:"updated_at,omitempty"`
 }
 
 type SupportTicket struct {

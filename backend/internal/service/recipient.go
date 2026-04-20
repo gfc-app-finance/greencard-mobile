@@ -12,8 +12,8 @@ import (
 )
 
 var (
-	ErrRecipientsUnavailable    = errors.New("recipients unavailable")
-	ErrRecipientNotFound        = errors.New("recipient not found")
+	ErrRecipientsUnavailable     = errors.New("recipients unavailable")
+	ErrRecipientNotFound         = errors.New("recipient not found")
 	ErrRecipientPermissionDenied = errors.New("recipient permission denied")
 )
 

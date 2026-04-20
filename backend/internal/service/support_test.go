@@ -47,8 +47,8 @@ func TestDefaultSupportServiceCreateTicketDeniedByPermission(t *testing.T) {
 }
 
 type fakeSupportTicketRepository struct {
-	createTicket       func(ctx context.Context, record model.SupportTicketRecord) (model.SupportTicketRecord, error)
-	listTicketsByUserID func(ctx context.Context, userID string) ([]model.SupportTicketRecord, error)
+	createTicket         func(ctx context.Context, record model.SupportTicketRecord) (model.SupportTicketRecord, error)
+	listTicketsByUserID  func(ctx context.Context, userID string) ([]model.SupportTicketRecord, error)
 	getTicketByIDForUser func(ctx context.Context, userID, ticketID string) (model.SupportTicketRecord, bool, error)
 }
 

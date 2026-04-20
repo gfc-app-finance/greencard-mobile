@@ -44,7 +44,7 @@ type UpdateProfileInput struct {
 }
 
 type CurrentUserProfileResponse struct {
-	Profile     UserProfile    `json:"profile"`
+	Profile     UserProfile   `json:"profile"`
 	Permissions PermissionSet `json:"permissions"`
 }
 

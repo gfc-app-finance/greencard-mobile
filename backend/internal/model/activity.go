@@ -24,18 +24,18 @@ const (
 type ActivityStatus string
 
 const (
-	ActivityStatusInitiated   ActivityStatus = "initiated"
-	ActivityStatusPending     ActivityStatus = "pending"
-	ActivityStatusCompleted   ActivityStatus = "completed"
-	ActivityStatusFailed      ActivityStatus = "failed"
-	ActivityStatusSubmitted   ActivityStatus = "submitted"
-	ActivityStatusUnderReview ActivityStatus = "under_review"
-	ActivityStatusProcessing  ActivityStatus = "processing"
-	ActivityStatusConverting  ActivityStatus = "converting"
-	ActivityStatusOpen        ActivityStatus = "open"
+	ActivityStatusInitiated     ActivityStatus = "initiated"
+	ActivityStatusPending       ActivityStatus = "pending"
+	ActivityStatusCompleted     ActivityStatus = "completed"
+	ActivityStatusFailed        ActivityStatus = "failed"
+	ActivityStatusSubmitted     ActivityStatus = "submitted"
+	ActivityStatusUnderReview   ActivityStatus = "under_review"
+	ActivityStatusProcessing    ActivityStatus = "processing"
+	ActivityStatusConverting    ActivityStatus = "converting"
+	ActivityStatusOpen          ActivityStatus = "open"
 	ActivityStatusInvestigating ActivityStatus = "investigating"
-	ActivityStatusResolved    ActivityStatus = "resolved"
-	ActivityStatusClosed      ActivityStatus = "closed"
+	ActivityStatusResolved      ActivityStatus = "resolved"
+	ActivityStatusClosed        ActivityStatus = "closed"
 )
 
 type LinkedEntityType string
@@ -49,18 +49,18 @@ const (
 )
 
 type ActivityRecord struct {
-	ID               string            `json:"id,omitempty"`
-	UserID           string            `json:"user_id"`
-	Type             ActivityType      `json:"type"`
-	Title            string            `json:"title"`
-	Subtitle         string            `json:"subtitle,omitempty"`
-	Amount           *float64          `json:"amount,omitempty"`
-	Currency         *AccountCurrency  `json:"currency,omitempty"`
-	Status           ActivityStatus    `json:"status"`
-	LinkedEntityType LinkedEntityType  `json:"linked_entity_type"`
-	LinkedEntityID   string            `json:"linked_entity_id"`
-	CreatedAt        *time.Time        `json:"created_at,omitempty"`
-	UpdatedAt        *time.Time        `json:"updated_at,omitempty"`
+	ID               string           `json:"id,omitempty"`
+	UserID           string           `json:"user_id"`
+	Type             ActivityType     `json:"type"`
+	Title            string           `json:"title"`
+	Subtitle         string           `json:"subtitle,omitempty"`
+	Amount           *float64         `json:"amount,omitempty"`
+	Currency         *AccountCurrency `json:"currency,omitempty"`
+	Status           ActivityStatus   `json:"status"`
+	LinkedEntityType LinkedEntityType `json:"linked_entity_type"`
+	LinkedEntityID   string           `json:"linked_entity_id"`
+	CreatedAt        *time.Time       `json:"created_at,omitempty"`
+	UpdatedAt        *time.Time       `json:"updated_at,omitempty"`
 }
 
 type ActivityItem struct {

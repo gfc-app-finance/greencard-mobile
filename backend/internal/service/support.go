@@ -11,9 +11,9 @@ import (
 )
 
 var (
-	ErrSupportUnavailable    = errors.New("support unavailable")
+	ErrSupportUnavailable      = errors.New("support unavailable")
 	ErrSupportPermissionDenied = errors.New("support permission denied")
-	ErrSupportTicketNotFound = errors.New("support ticket not found")
+	ErrSupportTicketNotFound   = errors.New("support ticket not found")
 )
 
 type SupportService interface {
@@ -25,15 +25,15 @@ type SupportService interface {
 }
 
 type DefaultSupportService struct {
-	logger          *slog.Logger
-	ticketRepo      repository.SupportTicketRepository
-	messageRepo     repository.SupportTicketMessageRepository
-	profileRepo     repository.ProfileRepository
-	fundingRepo     repository.FundingTransactionRepository
-	transferRepo    repository.TransferTransactionRepository
-	paymentRepo     repository.PaymentTransactionRepository
-	permissions     PermissionHelper
-	activities      ActivityEventRecorder
+	logger       *slog.Logger
+	ticketRepo   repository.SupportTicketRepository
+	messageRepo  repository.SupportTicketMessageRepository
+	profileRepo  repository.ProfileRepository
+	fundingRepo  repository.FundingTransactionRepository
+	transferRepo repository.TransferTransactionRepository
+	paymentRepo  repository.PaymentTransactionRepository
+	permissions  PermissionHelper
+	activities   ActivityEventRecorder
 }
 
 func NewSupportService(

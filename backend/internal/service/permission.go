@@ -31,14 +31,14 @@ func (DefaultPermissionHelper) PermissionsForStatus(status model.VerificationSta
 	switch status {
 	case model.VerificationStatusVerified:
 		return model.PermissionSet{
-			CanAddMoney:         true,
-			CanMoveMoney:        true,
-			CanSendPayments:     true,
-			CanReceivePayments:  true,
-			CanCreateCard:       true,
-			CanManageCard:       true,
-			CanCreateAccount:    true,
-			CanCreateRecipients: true,
+			CanAddMoney:             true,
+			CanMoveMoney:            true,
+			CanSendPayments:         true,
+			CanReceivePayments:      true,
+			CanCreateCard:           true,
+			CanManageCard:           true,
+			CanCreateAccount:        true,
+			CanCreateRecipients:     true,
 			CanCreateSupportTickets: true,
 		}
 	case model.VerificationStatusBasic,
