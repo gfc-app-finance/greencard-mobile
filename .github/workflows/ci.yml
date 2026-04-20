@@ -7,7 +7,7 @@ on:
       - main
 
 jobs:
-  quality:
+  frontend-quality:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -39,3 +39,58 @@ jobs:
           EXPO_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
           EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: placeholder-public-key
         run: npm run build:web
+
+  backend-quality:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+
+      - name: Formatting check
+        shell: bash
+        run: |
+          files="$(gofmt -l ./cmd ./internal)"
+          if [ -n "$files" ]; then
+            echo "The following files need gofmt:"
+            echo "$files"
+            exit 1
+          fi
+
+      - name: Test
+        run: go test ./...
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Build
+        run: go build ./cmd/api
+
+  quality:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    needs:
+      - frontend-quality
+      - backend-quality
+    if: always()
+
+    steps:
+      - name: Verify quality gates
+        shell: bash
+        run: |
+          if [ "${{ needs.frontend-quality.result }}" != "success" ] || [ "${{ needs.backend-quality.result }}" != "success" ]; then
+            echo "One or more required quality jobs failed."
+            exit 1
+          fi

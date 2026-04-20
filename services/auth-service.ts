@@ -1,5 +1,9 @@
 import type { Session, User } from '@supabase/supabase-js';
 
+import {
+  getEmailConfirmationRedirectUrl,
+  parseAuthConfirmationUrl,
+} from '@/lib/auth-deep-link';
 import { assertSupabaseEnv } from '@/lib/env';
 import { supabase } from '@/lib/supabase';
 import type { LoginFormValues, SignupFormValues } from '@/types/auth';
@@ -10,6 +14,12 @@ export type AuthResult = {
   user: User | null;
   needsEmailConfirmation: boolean;
   message?: string;
+};
+
+export type EmailConfirmationResult = {
+  session: Session | null;
+  user: User | null;
+  message: string;
 };
 
 export async function signIn(values: LoginFormValues): Promise<AuthResult> {
@@ -39,6 +49,7 @@ export async function signUp(values: SignupFormValues): Promise<AuthResult> {
     email: values.email.trim().toLowerCase(),
     password: values.password,
     options: {
+      emailRedirectTo: getEmailConfirmationRedirectUrl(),
       data: {
         full_name: values.fullName.trim(),
         phone_number: values.phoneNumber.trim(),
@@ -58,9 +69,75 @@ export async function signUp(values: SignupFormValues): Promise<AuthResult> {
     user: data.user,
     needsEmailConfirmation,
     message: needsEmailConfirmation
-      ? 'Check your email to confirm your account before signing in.'
+      ? 'Check your email to confirm your account. The confirmation link will bring you back into the app.'
       : 'Your Greencard account is ready. Complete profile and identity verification inside the app to unlock full access.',
   };
+}
+
+export async function completeEmailConfirmation(
+  url: string,
+): Promise<EmailConfirmationResult> {
+  assertSupabaseEnv();
+
+  const { accessToken, refreshToken, tokenHash, type, errorCode, errorDescription } =
+    parseAuthConfirmationUrl(url);
+
+  if (errorCode || errorDescription) {
+    throw new Error(
+      errorDescription ||
+        `Email confirmation failed${errorCode ? ` (${errorCode})` : ''}.`,
+    );
+  }
+
+  if (accessToken && refreshToken) {
+    const { data, error } = await supabase.auth.setSession({
+      access_token: accessToken,
+      refresh_token: refreshToken,
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    return {
+      session: data.session,
+      user: data.user,
+      message: 'Email confirmed. Taking you into your account.',
+    };
+  }
+
+  if (tokenHash && type) {
+    const { data, error } = await supabase.auth.verifyOtp({
+      token_hash: tokenHash,
+      type,
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    return {
+      session: data.session,
+      user: data.user,
+      message: data.session
+        ? 'Email confirmed. Taking you into your account.'
+        : 'Email confirmed. You can now log in to continue.',
+    };
+  }
+
+  const session = await getSession();
+
+  if (session) {
+    return {
+      session,
+      user: session.user,
+      message: 'Email confirmed. Taking you into your account.',
+    };
+  }
+
+  throw new Error(
+    'We could not finish confirming your email. Please open the latest confirmation email again.',
+  );
 }
 
 export async function signOut() {
@@ -97,9 +174,7 @@ export async function getCurrentUser() {
   return data.user;
 }
 
-export async function updateVerificationProfileMetadata(
-  profile: VerificationProfile
-) {
+export async function updateVerificationProfileMetadata(profile: VerificationProfile) {
   assertSupabaseEnv();
 
   const currentUser = await getCurrentUser();
@@ -108,10 +183,7 @@ export async function updateVerificationProfileMetadata(
     throw new Error('No signed-in user found for verification sync.');
   }
 
-  const existingMetadata = (currentUser.user_metadata || {}) as Record<
-    string,
-    unknown
-  >;
+  const existingMetadata = (currentUser.user_metadata || {}) as Record<string, unknown>;
 
   const nextMetadata = {
     ...existingMetadata,

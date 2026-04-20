@@ -68,6 +68,16 @@ Use shared primitives before introducing one-off variants.
 - keep auth/session persistence in vetted storage helpers
 - prefer least-privilege assumptions for any future backend/service integration
 
+## Backend Standards
+
+- keep HTTP concerns in `backend/internal/handler`
+- keep permission, verification, and transaction rules in `backend/internal/service`
+- keep Supabase-specific persistence in `backend/internal/repository`
+- never trust route parameters or request bodies without validation
+- ownership checks should fail as `not found` where that prevents cross-user resource disclosure
+- do not log tokens, secrets, full request bodies, raw bank details, or Supabase error payloads
+- add or update tests when changing permission logic, validators, transaction progression, or handler error mapping
+
 ## Tech Debt Expectations
 
 Before adding new code, ask:
