@@ -15,6 +15,7 @@
 
 ```bash
 npm run check
+cd backend && make check
 ```
 
 5. Update tests and docs when behavior or architecture changes.
@@ -52,6 +53,13 @@ Every PR should:
 - explain risks and follow-up work clearly
 - be ready for review before requesting review
 
+For backend changes specifically:
+
+- keep handlers thin and move business rules into `backend/internal/service`
+- keep Supabase access in `backend/internal/repository`
+- add or update permission checks through the shared permission helper instead of ad hoc handler logic
+- add tests for ownership, validation, and gated actions when backend behavior changes
+
 ## Review Checklist
 
 Reviewers should check:
@@ -83,6 +91,7 @@ This repo should be configured in GitHub so that:
 ## Need More Context?
 
 - [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)
+- [docs/BACKEND_ENGINEERING.md](./docs/BACKEND_ENGINEERING.md)
 - [docs/ENGINEERING_STANDARDS.md](./docs/ENGINEERING_STANDARDS.md)
 - [docs/TESTING.md](./docs/TESTING.md)
 - [docs/ENVIRONMENT.md](./docs/ENVIRONMENT.md)

@@ -33,6 +33,8 @@ At minimum, new work should add or update tests when it changes:
 - `npm run test`
 - `npm run test:watch`
 - `npm run test:ci`
+- `cd backend && go test ./...`
+- `cd backend && make check`
 
 ## Test Placement
 
@@ -45,3 +47,26 @@ Recommended structure:
 - `tests/services/`
 
 Keep test names aligned with the module under test.
+
+## Backend Coverage Focus
+
+Backend tests should prioritize:
+
+- permission and ownership helpers
+- verification gating
+- request validation
+- transaction status progression
+- activity event shaping
+- recipient masking and validation
+- support ticket linking and ownership checks
+- auth middleware success and failure paths
+
+## Backend Test Layout
+
+Prefer colocated Go tests next to the package under test, for example:
+
+- `backend/internal/service/*_test.go`
+- `backend/internal/handler/*_test.go`
+- `backend/internal/middleware/*_test.go`
+
+Keep repository integration tests small and only add them when the behavior cannot be covered meaningfully through services or handlers.
