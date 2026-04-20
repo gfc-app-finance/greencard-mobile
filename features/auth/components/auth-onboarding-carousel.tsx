@@ -1,3 +1,4 @@
+import { useRouter } from 'expo-router'; // Added this
 import { useEffect, useRef, useState } from 'react';
 import {
   Animated,
@@ -21,8 +22,9 @@ import { onboardingSlides } from '@/features/auth/constants/onboarding';
 import { useOnboarding } from '@/hooks/use-onboarding';
 
 export function AuthOnboardingCarousel() {
+  const router = useRouter();
   const { width } = useWindowDimensions();
-  const { finishOnboardingFlow, markOnboardingSeen } = useOnboarding();
+  const { markOnboardingSeen } = useOnboarding();
   const scrollViewRef = useRef<ScrollView | null>(null);
   const scrollX = useRef(new Animated.Value(0)).current;
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -54,15 +56,10 @@ export function AuthOnboardingCarousel() {
 
   function handleNext() {
     const nextIndex = currentIndex + 1;
-
-    if (nextIndex > lastIndex) {
-      return;
-    }
-
+    if (nextIndex > lastIndex) return;
     if (nextIndex === lastIndex) {
       void markOnboardingSeen();
     }
-
     scrollToIndex(nextIndex);
   }
 
@@ -72,19 +69,17 @@ export function AuthOnboardingCarousel() {
   }
 
   async function handleAuthRoute(href: '/signup' | '/login') {
-    await finishOnboardingFlow(href);
+    router.push(href as any);
   }
 
   return (
     <AuthEntryShell contentContainerStyle={styles.shellContent} scrollable={false}>
       <View style={styles.header}>
-        <View style={styles.brandChip}>
-          <Text style={styles.brandText}>GCF</Text>
-          <Text style={styles.brandSubtext}>Global money, made clearer</Text>
-        </View>
-
         {!isFinalSlide ? (
-          <Pressable onPress={handleSkip} style={({ pressed }) => [styles.skipButton, pressed && styles.pressed]}>
+          <Pressable
+            onPress={handleSkip}
+            style={({ pressed }) => [styles.skipButton, pressed && styles.pressed]}
+          >
             <Text style={styles.skipLabel}>Skip</Text>
           </Pressable>
         ) : (
@@ -100,15 +95,15 @@ export function AuthOnboardingCarousel() {
           horizontal
           key={slideWidth}
           onMomentumScrollEnd={handleMomentumScrollEnd}
-          onScroll={Animated.event(
-            [{ nativeEvent: { contentOffset: { x: scrollX } } }],
-            { useNativeDriver: false }
-          )}
+          onScroll={Animated.event([{ nativeEvent: { contentOffset: { x: scrollX } } }], {
+            useNativeDriver: false,
+          })}
           overScrollMode="never"
           pagingEnabled
           scrollEventThrottle={16}
           showsHorizontalScrollIndicator={false}
-          snapToInterval={slideWidth}>
+          snapToInterval={slideWidth}
+        >
           {onboardingSlides.map((slide, index) => (
             <OnboardingSlideCard
               key={slide.id}
@@ -136,11 +131,14 @@ export function AuthOnboardingCarousel() {
 
         {isFinalSlide ? (
           <View style={styles.ctaGroup}>
-            <AppButton title="Create account" onPress={() => void handleAuthRoute('/signup')} />
+            <AppButton
+              title="Create account"
+              onPress={() => handleAuthRoute('/signup')}
+            />
             <AppButton
               title="Log in"
               variant="secondary"
-              onPress={() => void handleAuthRoute('/login')}
+              onPress={() => handleAuthRoute('/login')}
             />
           </View>
         ) : (
