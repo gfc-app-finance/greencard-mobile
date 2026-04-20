@@ -2,7 +2,7 @@ APP_NAME ?= greencard-api
 BINARY_DIR := bin
 BINARY := $(BINARY_DIR)/api
 
-.PHONY: run build test fmt vet tidy clean docker-build
+.PHONY: run build test fmt fmt-check vet tidy check clean docker-build
 
 run:
 	go run ./cmd/api
@@ -17,11 +17,16 @@ test:
 fmt:
 	go fmt ./...
 
+fmt-check:
+	@test -z "$$(gofmt -l ./cmd ./internal)" || (gofmt -l ./cmd ./internal && exit 1)
+
 vet:
 	go vet ./...
 
 tidy:
 	go mod tidy
+
+check: fmt-check vet test build
 
 clean:
 	rm -rf $(BINARY_DIR)

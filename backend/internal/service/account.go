@@ -30,13 +30,15 @@ type DefaultAccountService struct {
 	logger       *slog.Logger
 	repository   repository.AccountRepository
 	seedProvider AccountSeedProvider
+	permissions  PermissionHelper
 }
 
-func NewAccountService(logger *slog.Logger, repository repository.AccountRepository) AccountService {
+func NewAccountService(logger *slog.Logger, repository repository.AccountRepository, permissions PermissionHelper) AccountService {
 	return &DefaultAccountService{
 		logger:       logger,
 		repository:   repository,
 		seedProvider: NewSeededAccountProvider(),
+		permissions:  permissions,
 	}
 }
 
@@ -53,6 +55,10 @@ func (s *DefaultAccountService) ListAccounts(ctx context.Context, user model.Aut
 
 	accounts := make([]model.Account, 0, len(records))
 	for _, record := range records {
+		if !s.permissions.CanAccessAccount(user, record) {
+			continue
+		}
+
 		account, ok := toAccountResponse(record)
 		if !ok {
 			continue
@@ -84,6 +90,10 @@ func (s *DefaultAccountService) GetAccount(ctx context.Context, user model.Authe
 		if !found {
 			return model.AccountDetailResponse{}, ErrAccountNotFound
 		}
+	}
+
+	if !s.permissions.CanAccessAccount(user, record) {
+		return model.AccountDetailResponse{}, ErrAccountNotFound
 	}
 
 	account, ok := toAccountResponse(record)

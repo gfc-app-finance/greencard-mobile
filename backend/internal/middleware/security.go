@@ -8,6 +8,7 @@ func SecurityHeaders(next http.Handler) http.Handler {
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("Referrer-Policy", "no-referrer")
 		w.Header().Set("X-Permitted-Cross-Domain-Policies", "none")
+		w.Header().Set("Cache-Control", "no-store")
 
 		next.ServeHTTP(w, r)
 	})

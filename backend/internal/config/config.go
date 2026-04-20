@@ -34,6 +34,13 @@ type SupabaseConfig struct {
 	RESTTimeout    time.Duration
 	ProfileTable   string
 	AccountTable   string
+	ActivityTable  string
+	FundingTable   string
+	TransferTable  string
+	PaymentTable   string
+	RecipientTable string
+	SupportTicketTable string
+	SupportMessageTable string
 }
 
 type HTTPConfig struct {
@@ -58,6 +65,13 @@ func Load() (Config, error) {
 			PublishableKey: strings.TrimSpace(os.Getenv("SUPABASE_PUBLISHABLE_KEY")),
 			ProfileTable:   getEnv("SUPABASE_PROFILE_TABLE", "profiles"),
 			AccountTable:   getEnv("SUPABASE_ACCOUNT_TABLE", "accounts"),
+			ActivityTable:  getEnv("SUPABASE_ACTIVITY_TABLE", "activities"),
+			FundingTable:   getEnv("SUPABASE_FUNDING_TABLE", "funding_transactions"),
+			TransferTable:  getEnv("SUPABASE_TRANSFER_TABLE", "transfer_transactions"),
+			PaymentTable:   getEnv("SUPABASE_PAYMENT_TABLE", "payment_transactions"),
+			RecipientTable: getEnv("SUPABASE_RECIPIENT_TABLE", "recipients"),
+			SupportTicketTable: getEnv("SUPABASE_SUPPORT_TICKET_TABLE", "support_tickets"),
+			SupportMessageTable: getEnv("SUPABASE_SUPPORT_MESSAGE_TABLE", "support_ticket_messages"),
 		},
 	}
 
@@ -182,6 +196,34 @@ func validate(cfg Config) error {
 
 	if !isSafeIdentifier(cfg.Supabase.AccountTable) {
 		return fmt.Errorf("invalid SUPABASE_ACCOUNT_TABLE %q", cfg.Supabase.AccountTable)
+	}
+
+	if !isSafeIdentifier(cfg.Supabase.ActivityTable) {
+		return fmt.Errorf("invalid SUPABASE_ACTIVITY_TABLE %q", cfg.Supabase.ActivityTable)
+	}
+
+	if !isSafeIdentifier(cfg.Supabase.FundingTable) {
+		return fmt.Errorf("invalid SUPABASE_FUNDING_TABLE %q", cfg.Supabase.FundingTable)
+	}
+
+	if !isSafeIdentifier(cfg.Supabase.TransferTable) {
+		return fmt.Errorf("invalid SUPABASE_TRANSFER_TABLE %q", cfg.Supabase.TransferTable)
+	}
+
+	if !isSafeIdentifier(cfg.Supabase.PaymentTable) {
+		return fmt.Errorf("invalid SUPABASE_PAYMENT_TABLE %q", cfg.Supabase.PaymentTable)
+	}
+
+	if !isSafeIdentifier(cfg.Supabase.RecipientTable) {
+		return fmt.Errorf("invalid SUPABASE_RECIPIENT_TABLE %q", cfg.Supabase.RecipientTable)
+	}
+
+	if !isSafeIdentifier(cfg.Supabase.SupportTicketTable) {
+		return fmt.Errorf("invalid SUPABASE_SUPPORT_TICKET_TABLE %q", cfg.Supabase.SupportTicketTable)
+	}
+
+	if !isSafeIdentifier(cfg.Supabase.SupportMessageTable) {
+		return fmt.Errorf("invalid SUPABASE_SUPPORT_MESSAGE_TABLE %q", cfg.Supabase.SupportMessageTable)
 	}
 
 	return nil

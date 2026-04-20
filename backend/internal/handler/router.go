@@ -15,6 +15,10 @@ func NewRouter(
 	authService service.AuthService,
 	profileService service.ProfileService,
 	accountService service.AccountService,
+	transactionService service.TransactionService,
+	activityService service.ActivityService,
+	recipientService service.RecipientService,
+	supportService service.SupportService,
 ) http.Handler {
 	publicMux := http.NewServeMux()
 	protectedMux := http.NewServeMux()
@@ -24,6 +28,10 @@ func NewRouter(
 	authSessionHandler := NewAuthSessionHandler(logger)
 	profileHandler := NewProfileHandler(logger, profileService)
 	accountHandler := NewAccountHandler(logger, accountService)
+	transactionHandler := NewTransactionHandler(logger, transactionService)
+	activityHandler := NewActivityHandler(logger, activityService)
+	recipientHandler := NewRecipientHandler(logger, recipientService)
+	supportHandler := NewSupportHandler(logger, supportService)
 
 	publicMux.HandleFunc("GET /health", healthHandler.Get)
 	protectedMux.HandleFunc("GET /auth/session", authSessionHandler.Get)
@@ -31,6 +39,25 @@ func NewRouter(
 	protectedMux.HandleFunc("PATCH /profile", profileHandler.Patch)
 	protectedMux.HandleFunc("GET /accounts", accountHandler.List)
 	protectedMux.HandleFunc("GET /accounts/{id}", accountHandler.Get)
+	protectedMux.HandleFunc("GET /activity", activityHandler.List)
+	protectedMux.HandleFunc("GET /activity/recent", activityHandler.ListRecent)
+	protectedMux.HandleFunc("POST /recipients", recipientHandler.Create)
+	protectedMux.HandleFunc("GET /recipients", recipientHandler.List)
+	protectedMux.HandleFunc("GET /recipients/{id}", recipientHandler.Get)
+	protectedMux.HandleFunc("POST /support/tickets", supportHandler.CreateTicket)
+	protectedMux.HandleFunc("GET /support/tickets", supportHandler.ListTickets)
+	protectedMux.HandleFunc("POST /support/tickets/{id}/messages", supportHandler.CreateMessage)
+	protectedMux.HandleFunc("GET /support/tickets/{id}/messages", supportHandler.ListMessages)
+	protectedMux.HandleFunc("GET /support/tickets/{id}", supportHandler.GetTicket)
+	protectedMux.HandleFunc("POST /transactions/funding", transactionHandler.CreateFunding)
+	protectedMux.HandleFunc("GET /transactions/funding", transactionHandler.ListFunding)
+	protectedMux.HandleFunc("GET /transactions/funding/{id}", transactionHandler.GetFunding)
+	protectedMux.HandleFunc("POST /transactions/transfers", transactionHandler.CreateTransfer)
+	protectedMux.HandleFunc("GET /transactions/transfers", transactionHandler.ListTransfers)
+	protectedMux.HandleFunc("GET /transactions/transfers/{id}", transactionHandler.GetTransfer)
+	protectedMux.HandleFunc("POST /transactions/payments", transactionHandler.CreatePayment)
+	protectedMux.HandleFunc("GET /transactions/payments", transactionHandler.ListPayments)
+	protectedMux.HandleFunc("GET /transactions/payments/{id}", transactionHandler.GetPayment)
 	rootMux.Handle("/", withJSONNotFound(publicMux))
 	rootMux.Handle(
 		"/v1/",

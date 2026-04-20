@@ -4,11 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
-	"strings"
 
 	"github.com/gfc-app-finance/greencard-mobile/backend/internal/config"
 	"github.com/gfc-app-finance/greencard-mobile/backend/internal/model"
@@ -56,8 +54,7 @@ func (r *SupabaseAccountRepository) ListByUserID(ctx context.Context, userID str
 	defer response.Body.Close()
 
 	if response.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(response.Body)
-		return nil, fmt.Errorf("supabase account list failed with status %d: %s", response.StatusCode, strings.TrimSpace(string(body)))
+		return nil, restStatusError("supabase account list", response.StatusCode)
 	}
 
 	var records []model.AccountRecord
@@ -90,8 +87,7 @@ func (r *SupabaseAccountRepository) GetByIDForUser(ctx context.Context, userID, 
 	defer response.Body.Close()
 
 	if response.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(response.Body)
-		return model.AccountRecord{}, false, fmt.Errorf("supabase account fetch failed with status %d: %s", response.StatusCode, strings.TrimSpace(string(body)))
+		return model.AccountRecord{}, false, restStatusError("supabase account fetch", response.StatusCode)
 	}
 
 	var records []model.AccountRecord

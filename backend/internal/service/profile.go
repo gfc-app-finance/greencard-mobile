@@ -62,7 +62,7 @@ func (s *DefaultProfileService) GetCurrentProfile(ctx context.Context, user mode
 		}
 	}
 
-	record.VerificationStatus = deriveVerificationStatus(record.VerificationStatus, record)
+	record.VerificationStatus = ResolveVerificationStatus(record.VerificationStatus, record)
 
 	return buildProfileResponse(user, record, s.permissions), nil
 }
@@ -88,7 +88,7 @@ func (s *DefaultProfileService) UpdateCurrentProfile(ctx context.Context, user m
 
 	mergedRecord := mergeProfileRecord(record, input)
 	mergedRecord.ID = user.ID
-	mergedRecord.VerificationStatus = deriveVerificationStatus(record.VerificationStatus, mergedRecord)
+	mergedRecord.VerificationStatus = ResolveVerificationStatus(record.VerificationStatus, mergedRecord)
 
 	savedRecord, err := s.repository.Upsert(ctx, mergedRecord)
 	if err != nil {
@@ -96,7 +96,7 @@ func (s *DefaultProfileService) UpdateCurrentProfile(ctx context.Context, user m
 		return model.CurrentUserProfileResponse{}, ErrProfileUnavailable
 	}
 
-	savedRecord.VerificationStatus = deriveVerificationStatus(savedRecord.VerificationStatus, savedRecord)
+	savedRecord.VerificationStatus = ResolveVerificationStatus(savedRecord.VerificationStatus, savedRecord)
 
 	return buildProfileResponse(user, savedRecord, s.permissions), nil
 }
@@ -208,7 +208,7 @@ func mergeProfileRecord(existing model.ProfileRecord, input model.UpdateProfileI
 	return merged
 }
 
-func deriveVerificationStatus(current model.VerificationStatus, profile model.ProfileRecord) model.VerificationStatus {
+func ResolveVerificationStatus(current model.VerificationStatus, profile model.ProfileRecord) model.VerificationStatus {
 	if !current.IsValid() {
 		current = model.VerificationStatusBasic
 	}

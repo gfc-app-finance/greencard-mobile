@@ -37,10 +37,48 @@ func run(logger *slog.Logger, cfg config.Config) error {
 	authService := service.NewSupabaseAuthService(logger, cfg.Supabase)
 	profileRepository := repository.NewSupabaseProfileRepository(logger, cfg.Supabase)
 	accountRepository := repository.NewSupabaseAccountRepository(logger, cfg.Supabase)
+	activityRepository := repository.NewSupabaseActivityRepository(logger, cfg.Supabase)
+	transactionRepository := repository.NewSupabaseTransactionRepository(logger, cfg.Supabase)
+	recipientRepository := repository.NewSupabaseRecipientRepository(logger, cfg.Supabase)
+	supportRepository := repository.NewSupabaseSupportRepository(logger, cfg.Supabase)
 	permissionHelper := service.NewPermissionHelper()
 	profileService := service.NewProfileService(logger, profileRepository, permissionHelper)
-	accountService := service.NewAccountService(logger, accountRepository)
-	router := handler.NewRouter(logger, healthService, authService, profileService, accountService)
+	accountService := service.NewAccountService(logger, accountRepository, permissionHelper)
+	activityService := service.NewActivityService(logger, activityRepository, accountRepository)
+	transactionService := service.NewTransactionService(
+		logger,
+		transactionRepository,
+		transactionRepository,
+		transactionRepository,
+		profileRepository,
+		accountRepository,
+		recipientRepository,
+		permissionHelper,
+		activityService,
+	)
+	recipientService := service.NewRecipientService(logger, recipientRepository, profileRepository, permissionHelper)
+	supportService := service.NewSupportService(
+		logger,
+		supportRepository,
+		supportRepository,
+		profileRepository,
+		transactionRepository,
+		transactionRepository,
+		transactionRepository,
+		permissionHelper,
+		activityService,
+	)
+	router := handler.NewRouter(
+		logger,
+		healthService,
+		authService,
+		profileService,
+		accountService,
+		transactionService,
+		activityService,
+		recipientService,
+		supportService,
+	)
 
 	server := &http.Server{
 		Addr:              ":" + cfg.Port,

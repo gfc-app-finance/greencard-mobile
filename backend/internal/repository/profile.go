@@ -10,7 +10,6 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
-	"strings"
 
 	"github.com/gfc-app-finance/greencard-mobile/backend/internal/config"
 	"github.com/gfc-app-finance/greencard-mobile/backend/internal/model"
@@ -58,8 +57,7 @@ func (r *SupabaseProfileRepository) GetByUserID(ctx context.Context, userID stri
 	defer response.Body.Close()
 
 	if response.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(response.Body)
-		return model.ProfileRecord{}, false, fmt.Errorf("supabase profile fetch failed with status %d: %s", response.StatusCode, strings.TrimSpace(string(body)))
+		return model.ProfileRecord{}, false, restStatusError("supabase profile fetch", response.StatusCode)
 	}
 
 	var records []model.ProfileRecord
@@ -102,8 +100,7 @@ func (r *SupabaseProfileRepository) Upsert(ctx context.Context, profile model.Pr
 	defer response.Body.Close()
 
 	if response.StatusCode != http.StatusOK && response.StatusCode != http.StatusCreated {
-		rawBody, _ := io.ReadAll(response.Body)
-		return model.ProfileRecord{}, fmt.Errorf("supabase profile upsert failed with status %d: %s", response.StatusCode, strings.TrimSpace(string(rawBody)))
+		return model.ProfileRecord{}, restStatusError("supabase profile upsert", response.StatusCode)
 	}
 
 	return decodeSingleProfileRecord(response.Body)

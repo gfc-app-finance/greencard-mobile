@@ -9,4 +9,5 @@ type PermissionSet struct {
 	CanManageCard       bool `json:"can_manage_card"`
 	CanCreateAccount    bool `json:"can_create_account"`
 	CanCreateRecipients bool `json:"can_create_recipients"`
+	CanCreateSupportTickets bool `json:"can_create_support_tickets"`
 }
