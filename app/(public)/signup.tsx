@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { ChevronLeft } from 'lucide-react-native';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AppCard } from '@/components/ui/app-card';
 import { NoticeBanner } from '@/components/ui/notice-banner';
@@ -20,43 +20,52 @@ export default function SignupScreen() {
         </Pressable>
       }
       eyebrow="CREATE ACCOUNT"
-      title="Create your Greencard account"
-      description="Banking without borders"
+      title="Join us"
+      description=""
     >
-      {!hasSupabaseEnv ? (
-        <NoticeBanner message="Add your Supabase keys to .env before testing sign up." />
-      ) : null}
+      {!hasSupabaseEnv && <NoticeBanner message="Check .env keys" />}
 
-      <AppCard>
-        <SignupForm />
-      </AppCard>
+      <View style={styles.premiumGlow}>
+        <AppCard>
+          <SignupForm />
+        </AppCard>
+      </View>
 
-      <View style={{ marginTop: 32 }}>
+      <View style={styles.switchRow}>
         <AuthSwitchRow
-          prompt="Already have an account?"
+          prompt="Have an account?"
           actionLabel="Log in"
           onPress={() => router.replace('/login')}
         />
       </View>
 
-      <View style={{ marginTop: 40, paddingHorizontal: 24, paddingBottom: 40 }}>
-        <View
-          style={{
-            height: 1,
-            backgroundColor: '#E5E7EB',
-            width: '100%',
-            marginBottom: 24,
-          }}
-        />
-        <View style={{ alignItems: 'center' }}>
-          <Text style={{ fontSize: 12, color: '#6B7280', textAlign: 'center' }}>
-            By continuing, you agree to our{' '}
-            <Text style={{ color: '#107569', fontWeight: '500' }}>Terms of Service</Text>{' '}
-            and{' '}
-            <Text style={{ color: '#107569', fontWeight: '500' }}>Privacy Policy</Text>
-          </Text>
-        </View>
+      <View style={styles.footer}>
+        <View style={styles.divider} />
+        <Text style={styles.footerText}>
+          By creating an account, you agree to our{' '}
+          <Text style={styles.linkText}>Terms</Text>
+          {' & '}
+          <Text style={styles.linkText}>Privacy Policy</Text>
+        </Text>
       </View>
     </AuthShell>
   );
 }
+
+const styles = StyleSheet.create({
+  premiumGlow: {
+    backgroundColor: '#FFF',
+    borderRadius: 20,
+    marginTop: -35,
+    shadowColor: '#107569',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.22,
+    shadowRadius: 20,
+    elevation: 12,
+  },
+  switchRow: { marginTop: 10 },
+  footer: { marginTop: 12, paddingHorizontal: 20, alignItems: 'center' },
+  divider: { height: 1, backgroundColor: '#F3F4F6', width: '100%', marginBottom: 10 },
+  footerText: { fontSize: 10.5, color: '#9CA3AF', textAlign: 'center' },
+  linkText: { color: '#107569', fontWeight: '700' },
+});

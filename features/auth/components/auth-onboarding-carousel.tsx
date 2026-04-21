@@ -1,4 +1,4 @@
-import { useRouter } from 'expo-router'; // Added this
+import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import {
   Animated,
@@ -75,10 +75,11 @@ export function AuthOnboardingCarousel() {
   return (
     <AuthEntryShell contentContainerStyle={styles.shellContent} scrollable={false}>
       <View style={styles.header}>
+        <View />
         {!isFinalSlide ? (
           <Pressable
             onPress={handleSkip}
-            style={({ pressed }) => [styles.skipButton, pressed && styles.pressed]}
+            style={({ pressed }) => [styles.skipLink, pressed && styles.pressed]}
           >
             <Text style={styles.skipLabel}>Skip</Text>
           </Pressable>
@@ -154,51 +155,29 @@ const styles = StyleSheet.create({
     gap: Spacing.lg,
     justifyContent: 'space-between',
     paddingBottom: Spacing.xl,
-    paddingTop: Spacing.sm,
+    paddingTop: Spacing.md,
   },
   header: {
-    alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'space-between',
-  },
-  brandChip: {
-    backgroundColor: Colors.surface,
-    borderColor: Colors.border,
-    borderRadius: Radius.full,
-    borderWidth: 1,
-    gap: 2,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 10,
-  },
-  brandText: {
-    color: Colors.text,
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 1.4,
-  },
-  brandSubtext: {
-    color: Colors.textSubtle,
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  skipButton: {
     alignItems: 'center',
-    backgroundColor: Colors.surface,
-    borderColor: Colors.border,
-    borderRadius: Radius.full,
-    borderWidth: 1,
-    justifyContent: 'center',
-    minHeight: 40,
-    minWidth: 74,
     paddingHorizontal: Spacing.md,
+    height: 44,
+  },
+  skipLink: {
+    backgroundColor: 'rgba(148, 163, 184, 0.1)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: Radius.full,
   },
   skipLabel: {
     color: Colors.textMuted,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
+    letterSpacing: 0.5,
   },
   skipSpacer: {
-    width: 74,
+    width: 44,
   },
   carouselWrap: {
     flex: 1,
@@ -209,14 +188,15 @@ const styles = StyleSheet.create({
   },
   helperText: {
     color: Colors.textSubtle,
-    fontSize: 14,
-    lineHeight: 21,
+    fontSize: 12,
+    lineHeight: 18,
     textAlign: 'center',
+    opacity: 0.7,
   },
   ctaGroup: {
     gap: Spacing.sm,
   },
   pressed: {
-    opacity: 0.9,
+    opacity: 0.7,
   },
 });
