@@ -9,7 +9,8 @@ This backend currently includes:
 - Step 5 transaction creation and retrieval for funding, transfers, and payments
 - Step 6 shared activity feed generation and retrieval
 - Step 7 recipients and support tickets
-- production hardening foundations for transaction lifecycle safety, balance movements, and provider webhook ingestion
+- production hardening foundations for transaction lifecycle safety, balance movements, provider webhook ingestion, async job coordination, and reconciliation checks
+- real provider integration foundation with Smile ID Enhanced KYC as the first KYC provider
 
 It currently sets up:
 
@@ -23,6 +24,10 @@ It currently sets up:
 - shared activity feed endpoints
 - saved recipient endpoints
 - support ticket and ticket message endpoints
+- async job ledger for distributed-safe worker claims
+- reconciliation checks for transaction, balance movement, and webhook-state alignment
+- provider abstraction for identity verification
+- Smile ID Enhanced KYC REST client with signed requests and safe response mapping
 - verification status modeling
 - permission helper foundation for future feature gating
 - structured logging
@@ -34,8 +39,8 @@ It currently sets up:
 
 It does **not** include:
 
-- live provider SDK integrations or external payment rails
-- ledger-grade balance mutation logic
+- live funding/collection or cross-border payout provider API calls
+- full double-entry accounting, reconciliation operations UI, or manual finance-ops tooling
 - admin support tooling or live chat
 
 ## Folder Structure
@@ -48,6 +53,7 @@ backend/
   internal/logger         structured logger bootstrap
   internal/middleware     request ID, recovery, logging, security headers, auth guard
   internal/model          response models
+  internal/provider       external provider clients and provider response mapping
   internal/repository     Supabase-backed data access
   internal/response       JSON/error response helpers
   internal/service        thin service layer
@@ -83,6 +89,7 @@ Optional defaults are already provided for:
 - `WORKER_ENABLED`
 - `WORKER_ENABLE_SIMULATION_PROGRESSION`
 - worker polling and timeout values
+- worker job lock, max-attempt, and reconciliation age values
 - HTTP timeout values
 - `SUPABASE_PUBLISHABLE_KEY`
 - `SUPABASE_PROFILE_TABLE`
@@ -99,6 +106,13 @@ Optional defaults are already provided for:
 - `SUPABASE_SUPPORT_MESSAGE_TABLE`
 - `WEBHOOK_SIGNATURE_TOLERANCE`
 - `WEBHOOK_SANDBOXPAY_SECRET`
+- `KYC_PROVIDER`
+- `SMILE_ID_ENVIRONMENT`
+- `SMILE_ID_PARTNER_ID`
+- `SMILE_ID_API_KEY`
+- `SMILE_ID_BASE_URL`
+- `SMILE_ID_SOURCE_SDK_VERSION`
+- `SMILE_ID_TIMEOUT`
 - Supabase auth timeout and JWKS cache TTL
 - Supabase REST timeout
 
@@ -122,13 +136,19 @@ The API starts on:
 http://localhost:8080
 ```
 
-When `WORKER_ENABLED=true`, the API process also starts an in-process background worker engine. The worker runs three small jobs:
+When `WORKER_ENABLED=true`, the API process also starts an in-process background worker engine. The worker runs small operational jobs:
 
 - transaction progression checks
 - stale transaction timeout checks
 - retry evaluation scans
+- transaction/balance movement reconciliation checks
+- provider webhook reconciliation checks
 
 Those jobs do not mutate transactions directly. They call the same centralized transaction lifecycle update service used by authenticated routes and provider webhooks, so transition validation, activity sync, and balance-settlement safety stay in one place.
+
+Mutable worker actions are guarded by `async_job_runs` claims keyed by the logical work item, such as `transaction_timeout:failed:funding_transaction:<reference>`. That makes repeated worker runs and multiple worker instances safer: only one claimant should process the same logical job, failed attempts are counted, and exhausted jobs are marked abandoned instead of looping forever.
+
+Reconciliation jobs are intentionally read-only. They compare completed transactions against expected balance movement records and compare provider webhook receipts against internal transaction state, then log mismatches for follow-up. They do not bypass the transaction lifecycle or settlement service.
 
 Health endpoint:
 
@@ -196,6 +216,22 @@ PATCH /v1/profile
 Authorization: Bearer <supabase-access-token>
 ```
 
+Identity verification endpoint:
+
+```text
+POST /v1/verification/identity
+Authorization: Bearer <supabase-access-token>
+```
+
+When `KYC_PROVIDER=smileid`, this endpoint submits a signed Smile ID Enhanced KYC REST request to the configured Smile ID environment. Raw ID numbers are sent only to the provider and are not stored or returned by the API.
+
+Smile ID result mapping:
+
+- approved / valid ID result -> `verified`
+- pending / issuer unavailable result -> `under_review`
+- rejected / invalid ID result -> `restricted`
+- provider HTTP/config/unexpected failures -> sanitized service errors without changing profile state
+
 Example profile update body:
 
 ```json
@@ -204,6 +240,20 @@ Example profile update body:
   "date_of_birth": "2002-01-01",
   "residential_address": "12 Admiralty Way, Lekki",
   "nationality": "Nigerian"
+}
+```
+
+Example identity verification request:
+
+```json
+{
+  "country": "NG",
+  "id_type": "NIN_V2",
+  "id_number": "12345678901",
+  "first_name": "Sodiq",
+  "last_name": "Ojodu",
+  "date_of_birth": "2002-01-01",
+  "phone_number": "08012345678"
 }
 ```
 
@@ -408,6 +458,7 @@ docker run --rm -p 8080:8080 --env-file .env greencard-api
 - a follow-up migration is available at `supabase/migrations/20260420_alter_transactions_add_status_metadata.sql` to add `status_reason` and `status_source` fields across transaction tables
 - a follow-up migration is available at `supabase/migrations/20260420_alter_transactions_add_last_status_change_at.sql` to add `last_status_change_at` and keep completion SQL functions aligned with lifecycle metadata
 - a checked-in migration is available at `supabase/migrations/20260420_create_provider_webhook_events.sql` to add provider webhook event receipts/audit records and unique transaction reference indexes
+- a checked-in migration is available at `supabase/migrations/20260421_create_async_job_runs.sql` to add distributed-safe worker claim records and completion RPCs
 - the idempotency repository expects a Supabase table named `idempotency_keys` by default
 - a checked-in Supabase migration is available at `supabase/migrations/20260420_create_idempotency_keys.sql`
 - the activity repository expects a Supabase table named `activities` by default
@@ -415,6 +466,7 @@ docker run --rm -p 8080:8080 --env-file .env greencard-api
 - the balance movement repository expects a Supabase table named `account_balance_movements` by default
 - a checked-in Supabase migration is available at `supabase/migrations/20260420_create_balance_movements.sql`
 - the webhook event repository expects a Supabase table named `provider_webhook_events` by default
+- the async job repository expects a Supabase table named `async_job_runs` by default
 - the recipient repository expects a Supabase table named `recipients` by default
 - the support repositories expect Supabase tables named `support_tickets` and `support_ticket_messages` by default
 - a checked-in Supabase migration is available at `supabase/migrations/20260419_create_recipients_and_support.sql`
@@ -427,6 +479,7 @@ docker run --rm -p 8080:8080 --env-file .env greencard-api
 - expected activity columns are `id`, `user_id`, `type`, `title`, `subtitle`, `amount`, `currency`, `status`, `linked_entity_type`, `linked_entity_id`, `created_at`, and `updated_at`
 - expected balance movement columns are `id`, `user_id`, `account_id`, `linked_entity_type`, `linked_entity_id`, `movement_type`, `direction`, `amount`, `currency`, and `created_at`
 - expected webhook event columns are `id`, `provider`, `event_id`, `event_type`, `linked_entity_type`, `linked_entity_id`, `linked_reference`, `processing_status`, `status_message`, `received_at`, `processed_at`, and `updated_at`
+- expected async job columns are `id`, `job_key`, `job_type`, `entity_type`, `entity_id`, `status`, `attempt_count`, `max_attempts`, `last_error`, `last_processed_at`, `locked_until`, `created_at`, and `updated_at`
 - expected recipient columns are `id`, `user_id`, `type`, `full_name`, `bank_name`, `account_number`, `iban`, `routing_number`, `sort_code`, `swift_code`, `country`, `currency`, `nickname`, `created_at`, and `updated_at`
 - expected support ticket columns are `id`, `user_id`, `title`, `issue_type`, `description`, `status`, `linked_entity_type`, `linked_entity_id`, `priority`, `created_at`, and `updated_at`
 - expected support message columns are `id`, `ticket_id`, `sender_type`, `message`, and `created_at`
@@ -445,8 +498,11 @@ docker run --rm -p 8080:8080 --env-file .env greencard-api
 - `last_status_change_at` tracks the last real lifecycle transition timestamp, while `updated_at` can also move when safe metadata refreshes happen on already-settled transactions
 - provider webhook deliveries are tracked in `provider_webhook_events`, and already-processed `(provider, event_id)` deliveries are ignored safely
 - webhook processing never mutates transaction rows directly from the handler; it maps the event into the shared transaction status updater by internal reference
+- identity verification provider calls go through `internal/provider` clients and the identity verification service, not HTTP handlers
+- Smile ID requests are signed with HMAC-SHA256 using the configured partner ID/API key and request timestamp
+- Smile ID callback signature confirmation is available in the provider client for the future KYC callback route
 - funding, transfer, and payment creation validate source-account affordability up front, but completion still performs the final sufficient-balance safety check before debiting
-- provider/webhook-driven status updates are not implemented yet; the shared service update methods are ready for future provider/manual callers, and non-production simulation is the only explicit HTTP updater path today
+- provider/webhook-driven status updates are implemented through verified provider webhook routes; non-production simulation remains available only as an explicit development helper
 - transaction creation itself still does not mutate account balances; balance changes only happen on committed completion
 - transaction events now create or update a shared activity item for:
   - funding created, completed, failed

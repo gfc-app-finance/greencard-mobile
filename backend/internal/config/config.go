@@ -12,16 +12,17 @@ import (
 )
 
 type Config struct {
-	AppName  string
-	Env      string
-	Version  string
-	Port     string
-	LogLevel string
-	Features FeatureFlags
-	Supabase SupabaseConfig
-	Webhooks WebhookConfig
-	Worker   WorkerConfig
-	HTTP     HTTPConfig
+	AppName   string
+	Env       string
+	Version   string
+	Port      string
+	LogLevel  string
+	Features  FeatureFlags
+	Supabase  SupabaseConfig
+	Webhooks  WebhookConfig
+	Providers ProviderConfig
+	Worker    WorkerConfig
+	HTTP      HTTPConfig
 }
 
 type FeatureFlags struct {
@@ -59,11 +60,28 @@ type WebhookConfig struct {
 	SignatureTolerance time.Duration
 }
 
+type ProviderConfig struct {
+	KYCProvider string
+	SmileID     SmileIDConfig
+}
+
+type SmileIDConfig struct {
+	Environment      string
+	PartnerID        string
+	APIKey           string
+	BaseURL          string
+	SourceSDKVersion string
+	Timeout          time.Duration
+}
+
 type WorkerConfig struct {
 	Enabled                     bool
 	EnableSimulationProgression bool
 	PollInterval                time.Duration
 	BatchSize                   int
+	JobLockTTL                  time.Duration
+	MaxAttempts                 int
+	ReconciliationAge           time.Duration
 	RetryEvaluationAge          time.Duration
 	FundingPendingTimeout       time.Duration
 	TransferConvertingTimeout   time.Duration
@@ -112,6 +130,16 @@ func Load() (Config, error) {
 		Webhooks: WebhookConfig{
 			SandboxPaySecret: strings.TrimSpace(os.Getenv("WEBHOOK_SANDBOXPAY_SECRET")),
 		},
+		Providers: ProviderConfig{
+			KYCProvider: strings.ToLower(getEnv("KYC_PROVIDER", "disabled")),
+			SmileID: SmileIDConfig{
+				Environment:      strings.ToLower(getEnv("SMILE_ID_ENVIRONMENT", "sandbox")),
+				PartnerID:        strings.TrimSpace(os.Getenv("SMILE_ID_PARTNER_ID")),
+				APIKey:           strings.TrimSpace(os.Getenv("SMILE_ID_API_KEY")),
+				BaseURL:          strings.TrimRight(strings.TrimSpace(os.Getenv("SMILE_ID_BASE_URL")), "/"),
+				SourceSDKVersion: getEnv("SMILE_ID_SOURCE_SDK_VERSION", "greencard-go-1.0"),
+			},
+		},
 	}
 
 	readTimeout, err := parseDurationEnv("HTTP_READ_TIMEOUT", 10*time.Second)
@@ -154,12 +182,32 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 
+	smileIDTimeout, err := parseDurationEnv("SMILE_ID_TIMEOUT", 10*time.Second)
+	if err != nil {
+		return Config{}, err
+	}
+
 	workerPollInterval, err := parseDurationEnv("WORKER_POLL_INTERVAL", 15*time.Second)
 	if err != nil {
 		return Config{}, err
 	}
 
 	workerBatchSize, err := parsePositiveIntEnv("WORKER_BATCH_SIZE", 100)
+	if err != nil {
+		return Config{}, err
+	}
+
+	workerJobLockTTL, err := parseDurationEnv("WORKER_JOB_LOCK_TTL", 2*time.Minute)
+	if err != nil {
+		return Config{}, err
+	}
+
+	workerMaxAttempts, err := parsePositiveIntEnv("WORKER_MAX_ATTEMPTS", 5)
+	if err != nil {
+		return Config{}, err
+	}
+
+	workerReconciliationAge, err := parseDurationEnv("WORKER_RECONCILIATION_AGE", 2*time.Minute)
 	if err != nil {
 		return Config{}, err
 	}
@@ -211,11 +259,18 @@ func Load() (Config, error) {
 	cfg.Supabase.JWKSCacheTTL = jwksCacheTTL
 	cfg.Supabase.RESTTimeout = restTimeout
 	cfg.Webhooks.SignatureTolerance = webhookSignatureTolerance
+	cfg.Providers.SmileID.Timeout = smileIDTimeout
+	if cfg.Providers.SmileID.BaseURL == "" {
+		cfg.Providers.SmileID.BaseURL = smileIDBaseURL(cfg.Providers.SmileID.Environment)
+	}
 	cfg.Worker = WorkerConfig{
 		Enabled:                     getBoolEnv("WORKER_ENABLED", cfgDefaultWorkerEnabled(cfg.Env)),
 		EnableSimulationProgression: getBoolEnv("WORKER_ENABLE_SIMULATION_PROGRESSION", cfg.Features.EnableTransactionSimulation),
 		PollInterval:                workerPollInterval,
 		BatchSize:                   workerBatchSize,
+		JobLockTTL:                  workerJobLockTTL,
+		MaxAttempts:                 workerMaxAttempts,
+		ReconciliationAge:           workerReconciliationAge,
 		RetryEvaluationAge:          workerRetryEvaluationAge,
 		FundingPendingTimeout:       fundingPendingTimeout,
 		TransferConvertingTimeout:   transferConvertingTimeout,
@@ -299,8 +354,45 @@ func validate(cfg Config) error {
 		return errors.New("webhook signature tolerance must be greater than zero")
 	}
 
+	if !isAllowedValue(cfg.Providers.KYCProvider, "disabled", "smileid") {
+		return fmt.Errorf("invalid KYC_PROVIDER %q", cfg.Providers.KYCProvider)
+	}
+
+	if !isAllowedValue(cfg.Providers.SmileID.Environment, "sandbox", "production") {
+		return fmt.Errorf("invalid SMILE_ID_ENVIRONMENT %q", cfg.Providers.SmileID.Environment)
+	}
+
+	if cfg.Providers.SmileID.Timeout <= 0 {
+		return errors.New("SMILE_ID_TIMEOUT must be greater than zero")
+	}
+
+	if cfg.Providers.KYCProvider == "smileid" {
+		if cfg.Providers.SmileID.PartnerID == "" {
+			missing = append(missing, "SMILE_ID_PARTNER_ID")
+		}
+
+		if cfg.Providers.SmileID.APIKey == "" {
+			missing = append(missing, "SMILE_ID_API_KEY")
+		}
+
+		if cfg.Providers.SmileID.BaseURL == "" {
+			missing = append(missing, "SMILE_ID_BASE_URL")
+		}
+
+		if len(missing) > 0 {
+			return fmt.Errorf("missing required environment variables: %s", strings.Join(missing, ", "))
+		}
+
+		if _, err := url.ParseRequestURI(cfg.Providers.SmileID.BaseURL); err != nil {
+			return fmt.Errorf("invalid SMILE_ID_BASE_URL: %w", err)
+		}
+	}
+
 	if cfg.Worker.PollInterval <= 0 ||
 		cfg.Worker.BatchSize <= 0 ||
+		cfg.Worker.JobLockTTL <= 0 ||
+		cfg.Worker.MaxAttempts <= 0 ||
+		cfg.Worker.ReconciliationAge <= 0 ||
 		cfg.Worker.RetryEvaluationAge <= 0 ||
 		cfg.Worker.FundingPendingTimeout <= 0 ||
 		cfg.Worker.TransferConvertingTimeout <= 0 ||
@@ -429,6 +521,15 @@ func cfgDefaultWorkerEnabled(env string) bool {
 		return true
 	default:
 		return false
+	}
+}
+
+func smileIDBaseURL(environment string) string {
+	switch strings.TrimSpace(strings.ToLower(environment)) {
+	case "production":
+		return "https://api.smileidentity.com"
+	default:
+		return "https://testapi.smileidentity.com"
 	}
 }
 

@@ -14,6 +14,7 @@ func NewRouter(
 	healthService service.HealthService,
 	authService service.AuthService,
 	profileService service.ProfileService,
+	identityVerificationService service.IdentityVerificationService,
 	accountService service.AccountService,
 	transactionService service.TransactionService,
 	idempotencyService service.IdempotencyService,
@@ -30,6 +31,7 @@ func NewRouter(
 	healthHandler := NewHealthHandler(logger, healthService)
 	authSessionHandler := NewAuthSessionHandler(logger)
 	profileHandler := NewProfileHandler(logger, profileService)
+	verificationHandler := NewVerificationHandler(logger, identityVerificationService)
 	accountHandler := NewAccountHandler(logger, accountService)
 	transactionHandler := NewTransactionHandler(logger, transactionService, idempotencyService)
 	webhookHandler := NewWebhookHandler(logger, webhookService)
@@ -42,6 +44,7 @@ func NewRouter(
 	protectedMux.HandleFunc("GET /auth/session", authSessionHandler.Get)
 	protectedMux.HandleFunc("GET /profile", profileHandler.Get)
 	protectedMux.HandleFunc("PATCH /profile", profileHandler.Patch)
+	protectedMux.HandleFunc("POST /verification/identity", verificationHandler.SubmitIdentity)
 	protectedMux.HandleFunc("GET /accounts", accountHandler.List)
 	protectedMux.HandleFunc("GET /accounts/{id}", accountHandler.Get)
 	protectedMux.HandleFunc("GET /activity", activityHandler.List)

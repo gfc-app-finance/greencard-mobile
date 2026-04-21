@@ -9,6 +9,8 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"strings"
+	"time"
 
 	"github.com/gfc-app-finance/greencard-mobile/backend/internal/config"
 	"github.com/gfc-app-finance/greencard-mobile/backend/internal/model"
@@ -19,6 +21,7 @@ const webhookEventSelectFields = "id,provider,event_id,event_type,linked_entity_
 type WebhookEventRepository interface {
 	Create(ctx context.Context, record model.WebhookEventRecord) (model.WebhookEventRecord, error)
 	GetByProviderEventID(ctx context.Context, provider model.WebhookProvider, eventID string) (model.WebhookEventRecord, bool, error)
+	ListByProcessingStatusesBefore(ctx context.Context, statuses []model.WebhookProcessingStatus, before time.Time, limit int) ([]model.WebhookEventRecord, error)
 	UpdateProcessing(ctx context.Context, recordID string, payload map[string]any) (model.WebhookEventRecord, error)
 }
 
@@ -107,6 +110,44 @@ func (r *SupabaseWebhookEventRepository) GetByProviderEventID(ctx context.Contex
 	}
 
 	return records[0], true, nil
+}
+
+func (r *SupabaseWebhookEventRepository) ListByProcessingStatusesBefore(ctx context.Context, statuses []model.WebhookProcessingStatus, before time.Time, limit int) ([]model.WebhookEventRecord, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+
+	requestURL := fmt.Sprintf(
+		"%s/%s?processing_status=in.(%s)&received_at=lte.%s&select=%s&order=received_at.asc&limit=%d",
+		r.config.RESTURL,
+		r.config.WebhookEventTable,
+		url.QueryEscape(strings.Join(statusStrings(statuses), ",")),
+		url.QueryEscape(before.UTC().Format(time.RFC3339)),
+		url.QueryEscape(webhookEventSelectFields),
+		limit,
+	)
+
+	request, err := r.newRequest(ctx, http.MethodGet, requestURL, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	response, err := r.client.Do(request)
+	if err != nil {
+		return nil, err
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusOK {
+		return nil, restStatusError("supabase list webhook events", response.StatusCode)
+	}
+
+	var records []model.WebhookEventRecord
+	if err := json.NewDecoder(response.Body).Decode(&records); err != nil {
+		return nil, err
+	}
+
+	return records, nil
 }
 
 func (r *SupabaseWebhookEventRepository) UpdateProcessing(ctx context.Context, recordID string, payload map[string]any) (model.WebhookEventRecord, error) {

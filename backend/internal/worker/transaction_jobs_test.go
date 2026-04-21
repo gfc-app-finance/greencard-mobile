@@ -85,6 +85,37 @@ func (f fakeLifecycleUpdater) UpdatePaymentStatusByReference(ctx context.Context
 	return model.PaymentTransactionResponse{}, nil
 }
 
+type fakeAsyncJobCoordinator struct {
+	claimed          bool
+	claimCalls       []model.AsyncJobClaimRequest
+	completeStatuses []model.AsyncJobStatus
+	completeMessages []*string
+}
+
+func (f *fakeAsyncJobCoordinator) Claim(ctx context.Context, request model.AsyncJobClaimRequest) (model.AsyncJobRunRecord, bool, error) {
+	f.claimCalls = append(f.claimCalls, request)
+	return model.AsyncJobRunRecord{JobKey: request.JobKey}, f.claimed, nil
+}
+
+func (f *fakeAsyncJobCoordinator) Complete(ctx context.Context, jobKey string, status model.AsyncJobStatus, message *string) (model.AsyncJobRunRecord, error) {
+	f.completeStatuses = append(f.completeStatuses, status)
+	f.completeMessages = append(f.completeMessages, message)
+	return model.AsyncJobRunRecord{JobKey: jobKey, Status: status}, nil
+}
+
+type fakeReconciliationRunner struct {
+	transactionReport model.ReconciliationReport
+	webhookReport     model.ReconciliationReport
+}
+
+func (f fakeReconciliationRunner) RunTransactionBalanceReconciliation(ctx context.Context, before time.Time, limit int) (model.ReconciliationReport, error) {
+	return f.transactionReport, nil
+}
+
+func (f fakeReconciliationRunner) RunWebhookReconciliation(ctx context.Context, before time.Time, limit int) (model.ReconciliationReport, error) {
+	return f.webhookReport, nil
+}
+
 func TestRunProgressionChecksAdvancesEligibleTransactions(t *testing.T) {
 	now := time.Date(2026, time.April, 20, 12, 0, 0, 0, time.UTC)
 	calls := make([]lifecycleCall, 0, 3)
@@ -130,6 +161,8 @@ func TestRunProgressionChecksAdvancesEligibleTransactions(t *testing.T) {
 				return model.PaymentTransactionResponse{}, nil
 			},
 		},
+		nil,
+		nil,
 	)
 	jobs.now = func() time.Time { return now }
 
@@ -199,6 +232,8 @@ func TestRunStaleTimeoutChecksFailsTimedOutTransactions(t *testing.T) {
 				return model.PaymentTransactionResponse{}, nil
 			},
 		},
+		nil,
+		nil,
 	)
 	jobs.now = func() time.Time { return now }
 
@@ -256,6 +291,8 @@ func TestRunRetryEvaluationCountsCandidatesWithoutMutation(t *testing.T) {
 				return model.FundingTransactionResponse{}, nil
 			},
 		},
+		nil,
+		nil,
 	)
 
 	result, err := jobs.RunRetryEvaluation(context.Background())
@@ -291,6 +328,8 @@ func TestRunProgressionChecksSkipsInvalidTransition(t *testing.T) {
 				return model.FundingTransactionResponse{}, service.ErrInvalidTransactionTransition
 			},
 		},
+		nil,
+		nil,
 	)
 
 	result, err := jobs.RunProgressionChecks(context.Background())
@@ -334,6 +373,8 @@ func TestRunStaleTimeoutChecksRemainSafeAcrossRepeatedRuns(t *testing.T) {
 				return model.FundingTransactionResponse{}, service.ErrInvalidTransactionTransition
 			},
 		},
+		nil,
+		nil,
 	)
 
 	first, err := jobs.RunStaleTimeoutChecks(context.Background())
@@ -367,10 +408,139 @@ func TestRunProgressionChecksReturnsScanError(t *testing.T) {
 		fakeTransferScanner{},
 		fakePaymentScanner{},
 		fakeLifecycleUpdater{},
+		nil,
+		nil,
 	)
 
 	_, err := jobs.RunProgressionChecks(context.Background())
 	if err == nil {
 		t.Fatal("expected scan error")
+	}
+}
+
+func TestRunProgressionChecksSkipsWhenAsyncJobAlreadyClaimed(t *testing.T) {
+	updateCalled := false
+	coordinator := &fakeAsyncJobCoordinator{claimed: false}
+
+	jobs := NewTransactionJobs(
+		nil,
+		config.WorkerConfig{
+			BatchSize:                   10,
+			EnableSimulationProgression: true,
+			JobLockTTL:                  time.Minute,
+			MaxAttempts:                 3,
+		},
+		fakeFundingScanner{
+			list: func(ctx context.Context, statuses []model.FundingStatus, before time.Time, limit int) ([]model.FundingTransactionRecord, error) {
+				if len(statuses) == 1 && statuses[0] == model.FundingStatusInitiated {
+					return []model.FundingTransactionRecord{{Reference: "funding_ref_123"}}, nil
+				}
+				return nil, nil
+			},
+		},
+		fakeTransferScanner{},
+		fakePaymentScanner{},
+		fakeLifecycleUpdater{
+			updateFundingByReference: func(ctx context.Context, reference string, targetStatus model.FundingStatus, source model.TransactionStatusSource, reason *string) (model.FundingTransactionResponse, error) {
+				updateCalled = true
+				return model.FundingTransactionResponse{}, nil
+			},
+		},
+		coordinator,
+		nil,
+	)
+
+	result, err := jobs.RunProgressionChecks(context.Background())
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	if result.Checked != 1 || result.Updated != 0 {
+		t.Fatalf("expected one checked record and no update, got %#v", result)
+	}
+	if updateCalled {
+		t.Fatal("expected claimed async job to skip lifecycle mutation")
+	}
+	if len(coordinator.claimCalls) != 1 {
+		t.Fatalf("expected one async job claim, got %d", len(coordinator.claimCalls))
+	}
+	if len(coordinator.completeStatuses) != 0 {
+		t.Fatalf("expected no completion for unclaimed job, got %#v", coordinator.completeStatuses)
+	}
+}
+
+func TestRunProgressionChecksMarksAsyncJobFailedForRetryableError(t *testing.T) {
+	coordinator := &fakeAsyncJobCoordinator{claimed: true}
+	transientErr := errors.New("temporary provider outage")
+
+	jobs := NewTransactionJobs(
+		nil,
+		config.WorkerConfig{
+			BatchSize:                   10,
+			EnableSimulationProgression: true,
+			JobLockTTL:                  time.Minute,
+			MaxAttempts:                 3,
+		},
+		fakeFundingScanner{
+			list: func(ctx context.Context, statuses []model.FundingStatus, before time.Time, limit int) ([]model.FundingTransactionRecord, error) {
+				if len(statuses) == 1 && statuses[0] == model.FundingStatusInitiated {
+					return []model.FundingTransactionRecord{{Reference: "funding_ref_123"}}, nil
+				}
+				return nil, nil
+			},
+		},
+		fakeTransferScanner{},
+		fakePaymentScanner{},
+		fakeLifecycleUpdater{
+			updateFundingByReference: func(ctx context.Context, reference string, targetStatus model.FundingStatus, source model.TransactionStatusSource, reason *string) (model.FundingTransactionResponse, error) {
+				return model.FundingTransactionResponse{}, transientErr
+			},
+		},
+		coordinator,
+		nil,
+	)
+
+	_, err := jobs.RunProgressionChecks(context.Background())
+	if !errors.Is(err, transientErr) {
+		t.Fatalf("expected transient error, got %v", err)
+	}
+
+	if len(coordinator.completeStatuses) != 1 || coordinator.completeStatuses[0] != model.AsyncJobStatusFailed {
+		t.Fatalf("expected failed async job completion, got %#v", coordinator.completeStatuses)
+	}
+}
+
+func TestRunReconciliationChecksAggregatesReports(t *testing.T) {
+	jobs := NewTransactionJobs(
+		nil,
+		config.WorkerConfig{
+			BatchSize:         10,
+			ReconciliationAge: 2 * time.Minute,
+		},
+		fakeFundingScanner{},
+		fakeTransferScanner{},
+		fakePaymentScanner{},
+		fakeLifecycleUpdater{},
+		nil,
+		fakeReconciliationRunner{
+			transactionReport: model.ReconciliationReport{
+				Checked: 2,
+				Issues: []model.ReconciliationIssue{{
+					Type: model.ReconciliationIssueCompletedTransactionMissingMovement,
+				}},
+			},
+			webhookReport: model.ReconciliationReport{
+				Checked: 1,
+			},
+		},
+	)
+
+	result, err := jobs.RunReconciliationChecks(context.Background())
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	if result.Checked != 3 || result.Updated != 0 {
+		t.Fatalf("expected reconciliation to check three records without mutation, got %#v", result)
 	}
 }

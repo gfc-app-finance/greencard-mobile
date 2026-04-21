@@ -13,6 +13,7 @@ import (
 	"github.com/gfc-app-finance/greencard-mobile/backend/internal/config"
 	"github.com/gfc-app-finance/greencard-mobile/backend/internal/handler"
 	applogger "github.com/gfc-app-finance/greencard-mobile/backend/internal/logger"
+	"github.com/gfc-app-finance/greencard-mobile/backend/internal/provider"
 	"github.com/gfc-app-finance/greencard-mobile/backend/internal/repository"
 	"github.com/gfc-app-finance/greencard-mobile/backend/internal/service"
 	"github.com/gfc-app-finance/greencard-mobile/backend/internal/worker"
@@ -42,12 +43,25 @@ func run(logger *slog.Logger, cfg config.Config) error {
 	transactionRepository := repository.NewSupabaseTransactionRepository(logger, cfg.Supabase)
 	idempotencyRepository := repository.NewSupabaseIdempotencyRepository(logger, cfg.Supabase)
 	webhookEventRepository := repository.NewSupabaseWebhookEventRepository(logger, cfg.Supabase)
+	balanceMovementRepository := repository.NewSupabaseBalanceMovementRepository(logger, cfg.Supabase)
+	asyncJobRepository := repository.NewSupabaseAsyncJobRepository(logger, cfg.Supabase)
 	recipientRepository := repository.NewSupabaseRecipientRepository(logger, cfg.Supabase)
 	supportRepository := repository.NewSupabaseSupportRepository(logger, cfg.Supabase)
 	permissionHelper := service.NewPermissionHelper()
 	verificationResolver := service.NewVerificationResolver(logger, profileRepository)
 	idempotencyService := service.NewIdempotencyService(logger, idempotencyRepository)
 	profileService := service.NewProfileService(logger, profileRepository, permissionHelper, verificationResolver)
+	identityProvider, err := newIdentityProvider(logger, cfg)
+	if err != nil {
+		return err
+	}
+	identityVerificationService := service.NewIdentityVerificationService(
+		logger,
+		profileRepository,
+		permissionHelper,
+		verificationResolver,
+		identityProvider,
+	)
 	accountService := service.NewAccountService(logger, accountRepository, permissionHelper, cfg.Features.EnableSeededAccountFallback)
 	activityService := service.NewActivityService(logger, activityRepository, accountRepository, cfg.Features.EnableSeededAccountFallback)
 	transactionService := service.NewTransactionService(
@@ -71,6 +85,12 @@ func run(logger *slog.Logger, cfg config.Config) error {
 		transactionLifecycleService,
 		service.NewWebhookProviders(cfg.Webhooks)...,
 	)
+	reconciliationService := service.NewReconciliationService(
+		logger,
+		transactionRepository,
+		balanceMovementRepository,
+		webhookEventRepository,
+	)
 	recipientService := service.NewRecipientService(logger, recipientRepository, permissionHelper, verificationResolver)
 	supportService := service.NewSupportService(
 		logger,
@@ -88,6 +108,7 @@ func run(logger *slog.Logger, cfg config.Config) error {
 		healthService,
 		authService,
 		profileService,
+		identityVerificationService,
 		accountService,
 		transactionService,
 		idempotencyService,
@@ -104,6 +125,8 @@ func run(logger *slog.Logger, cfg config.Config) error {
 		transactionRepository,
 		transactionRepository,
 		transactionLifecycleService,
+		asyncJobRepository,
+		reconciliationService,
 	)
 	workerEngine := worker.NewEngine(logger, cfg.Worker.PollInterval, transactionJobs.Jobs()...)
 
@@ -164,4 +187,13 @@ func run(logger *slog.Logger, cfg config.Config) error {
 	logger.Info("api server stopped gracefully")
 
 	return nil
+}
+
+func newIdentityProvider(logger *slog.Logger, cfg config.Config) (provider.IdentityVerifier, error) {
+	switch cfg.Providers.KYCProvider {
+	case "smileid":
+		return provider.NewSmileIDClient(logger, cfg.Providers.SmileID)
+	default:
+		return nil, nil
+	}
 }

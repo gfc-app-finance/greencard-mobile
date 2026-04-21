@@ -35,6 +35,10 @@ func (f fakeWebhookEventRepository) GetByProviderEventID(ctx context.Context, pr
 	return model.WebhookEventRecord{}, false, nil
 }
 
+func (f fakeWebhookEventRepository) ListByProcessingStatusesBefore(ctx context.Context, statuses []model.WebhookProcessingStatus, before time.Time, limit int) ([]model.WebhookEventRecord, error) {
+	return nil, nil
+}
+
 func (f fakeWebhookEventRepository) UpdateProcessing(ctx context.Context, recordID string, payload map[string]any) (model.WebhookEventRecord, error) {
 	if f.updateProcessing != nil {
 		return f.updateProcessing(ctx, recordID, payload)

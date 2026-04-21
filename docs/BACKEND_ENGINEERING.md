@@ -112,4 +112,18 @@ make check
 - duplicate webhook deliveries must be safe by combining webhook event receipt records with idempotent completion/settlement logic
 - background workers should never mutate transactions directly through repositories; they must call the shared lifecycle updater by reference
 - worker-driven timeouts or delayed progression must remain idempotent so repeated polling does not duplicate money effects
+- mutable worker actions should claim a stable `async_job_runs` key before calling lifecycle services, so duplicate worker instances and repeated polling do not process the same logical job at the same time
+- async job attempts should have explicit max attempts and lock TTLs; exhausted jobs should be marked abandoned instead of looping forever
 - retry evaluation is allowed to inspect and log candidate work, but it should not invent a second status-mutation path outside the lifecycle service
+- reconciliation jobs are read-only operational checks; they may compare transaction state, balance movements, and webhook receipts, but they must not bypass the lifecycle or settlement services
+- reconciliation mismatches should be logged with safe entity references and followed up operationally rather than hidden or auto-fixed with ad hoc mutations
+
+## Provider Integration Notes
+
+- provider API clients live in `backend/internal/provider`; handlers should not build provider HTTP requests directly
+- provider credentials must come from config/env and must never be logged
+- provider clients should expose typed internal results and errors instead of leaking raw provider payloads to services or handlers
+- Smile ID is the first real KYC provider integration and currently uses the Enhanced KYC REST `id_verification` endpoint
+- identity verification requests may send raw ID numbers to the configured provider, but raw ID numbers should not be persisted or returned by GreenCard API responses
+- KYC provider decisions map into GreenCard verification states in the service layer: approved -> `verified`, pending -> `under_review`, rejected -> `restricted`
+- future funding and payout provider clients should follow the same pattern: provider package for API calls, service layer for orchestration, repository layer for persistence, and webhook handlers only for verified event ingestion
