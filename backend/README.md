@@ -40,6 +40,7 @@ It currently sets up:
 - health check endpoint
 - protected route middleware and request-context user extraction
 - Docker and Make targets
+- deployment/operations runbook in `OPERATIONS.md`
 
 It does **not** include:
 
@@ -80,6 +81,14 @@ Required:
 
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`
+
+Production also requires:
+
+- `APP_ENV=production`
+- `APP_VERSION` set to a release version or commit SHA, not `dev`
+- `RATE_LIMIT_ENABLED=true`
+- `ENABLE_TRANSACTION_SIMULATION=false`
+- `WORKER_ENABLE_SIMULATION_PROGRESSION=false`
 
 Optional defaults are already provided for:
 
@@ -160,7 +169,11 @@ Health endpoint:
 
 ```text
 GET /health
+GET /live
+GET /ready
 ```
+
+`/health` and `/live` are liveness checks. `/ready` is the readiness endpoint intended for deployment and load-balancer health checks.
 
 Protected auth test endpoint:
 
@@ -398,6 +411,12 @@ make tidy
 make docker-build
 ```
 
+Validate runtime configuration without starting the server:
+
+```bash
+go run ./cmd/api check-config
+```
+
 ## Backend Permission Model
 
 The backend enforces permission checks in the service layer, not in frontend-only flows.
@@ -438,7 +457,7 @@ make check
 Build from the `backend` directory:
 
 ```bash
-docker build -t greencard-api .
+make docker-build APP_VERSION=<release-version>
 ```
 
 Run:
@@ -446,6 +465,12 @@ Run:
 ```bash
 docker run --rm -p 8080:8080 --env-file .env greencard-api
 ```
+
+The container runs as a non-root user and includes a Docker healthcheck against `/ready`.
+
+## Operations
+
+See `OPERATIONS.md` for deployment, health check, logging, config smoke test, and troubleshooting guidance.
 
 ## Notes
 
@@ -456,6 +481,7 @@ docker run --rm -p 8080:8080 --env-file .env greencard-api
 - rate limiting returns a consistent `429 rate_limit_exceeded` JSON response with `Retry-After`
 - protected routes validate Supabase access tokens before reaching handlers
 - request context carries a sanitized authenticated user model for downstream handlers
+- `X-Request-ID` and `X-Correlation-ID` are mirrored for request tracing
 - JWT verification prefers JWKS and falls back to Supabase Auth token introspection for legacy/shared-secret projects
 - the profile repository expects a Supabase table named `profiles` by default
 - a checked-in Supabase migration is available at `supabase/migrations/20260419_create_profiles.sql`

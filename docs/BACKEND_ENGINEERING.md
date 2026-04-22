@@ -65,6 +65,8 @@ For transaction writes:
 - log request IDs, route paths, status, and sanitized operational errors
 - do not log tokens, secrets, raw Supabase error payloads, full bank details, or full request bodies
 - prefer generic client errors and more specific internal logs only when they remain safe
+- propagate either `X-Request-ID` or `X-Correlation-ID` so support/debugging can follow one request across logs
+- startup logs should summarize safe runtime configuration without printing secrets
 
 ## Rate Limiting and Abuse Protection
 
@@ -74,6 +76,16 @@ For transaction writes:
 - provider webhook routes should use a dedicated public webhook policy and still verify signatures before processing payloads
 - do not log full IPs, tokens, or request bodies for rate-limit events; log policy, scope, path, request ID, and a hashed key only
 - only enable proxy-header trust when deployment infrastructure guarantees `X-Forwarded-For` or `X-Real-IP` cannot be spoofed by clients
+
+## Deployment and Operations Notes
+
+- `/live` and `/health` are liveness endpoints for process health
+- `/ready` is the readiness endpoint for load balancers and container health checks
+- use `go run ./cmd/api check-config` or the image `check-config` command before deploying a new environment
+- production deployments must set `APP_VERSION` to a release version or commit SHA
+- production deployments must keep transaction simulation and worker simulation disabled
+- Docker images should be built through the backend Dockerfile or `make docker-build`, which runs a multi-stage build and drops runtime privileges to a non-root user
+- keep deployment runbooks in `backend/OPERATIONS.md`
 
 ## Audit and Compliance Logging
 

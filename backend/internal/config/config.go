@@ -401,6 +401,22 @@ func validate(cfg Config) error {
 		return errors.New("WORKER_ENABLE_SIMULATION_PROGRESSION cannot be enabled in production")
 	}
 
+	if cfg.Env == "production" && strings.EqualFold(cfg.Version, "dev") {
+		return errors.New("APP_VERSION must be set to a release identifier in production")
+	}
+
+	if cfg.Env == "production" && strings.EqualFold(cfg.LogLevel, "debug") {
+		return errors.New("LOG_LEVEL=debug cannot be used in production")
+	}
+
+	if cfg.Env == "production" && !cfg.RateLimit.Enabled {
+		return errors.New("RATE_LIMIT_ENABLED cannot be disabled in production")
+	}
+
+	if cfg.Env == "production" && cfg.Providers.KYCProvider == "smileid" && cfg.Providers.SmileID.Environment != "production" {
+		return errors.New("SMILE_ID_ENVIRONMENT must be production when APP_ENV=production and KYC_PROVIDER=smileid")
+	}
+
 	if !isAllowedValue(strings.ToLower(cfg.LogLevel), "debug", "info", "warn", "error") {
 		return fmt.Errorf("invalid LOG_LEVEL %q", cfg.LogLevel)
 	}

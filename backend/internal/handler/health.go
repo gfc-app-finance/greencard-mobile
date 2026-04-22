@@ -28,3 +28,20 @@ func (h *HealthHandler) Get(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, http.StatusInternalServerError, "response_write_failed", "failed to write response", "")
 	}
 }
+
+func (h *HealthHandler) Live(w http.ResponseWriter, r *http.Request) {
+	h.Get(w, r)
+}
+
+func (h *HealthHandler) Ready(w http.ResponseWriter, r *http.Request) {
+	status := h.service.Readiness()
+	statusCode := http.StatusOK
+	if status.Status != "ready" {
+		statusCode = http.StatusServiceUnavailable
+	}
+
+	if err := response.JSON(w, statusCode, status); err != nil {
+		h.logger.Error("failed to write readiness response", slog.String("error", err.Error()))
+		response.Error(w, http.StatusInternalServerError, "response_write_failed", "failed to write response", "")
+	}
+}

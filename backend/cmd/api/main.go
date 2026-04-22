@@ -14,10 +14,17 @@ import (
 	"github.com/gfc-app-finance/greencard-mobile/backend/internal/handler"
 	applogger "github.com/gfc-app-finance/greencard-mobile/backend/internal/logger"
 	"github.com/gfc-app-finance/greencard-mobile/backend/internal/middleware"
+	"github.com/gfc-app-finance/greencard-mobile/backend/internal/model"
 	"github.com/gfc-app-finance/greencard-mobile/backend/internal/provider"
 	"github.com/gfc-app-finance/greencard-mobile/backend/internal/repository"
 	"github.com/gfc-app-finance/greencard-mobile/backend/internal/service"
 	"github.com/gfc-app-finance/greencard-mobile/backend/internal/worker"
+)
+
+var (
+	buildVersion = "dev"
+	buildCommit  = "unknown"
+	buildDate    = "unknown"
 )
 
 func main() {
@@ -26,8 +33,25 @@ func main() {
 		log.Printf("backend config error: %v", err)
 		os.Exit(1)
 	}
+	if cfg.Version == "" || cfg.Version == "dev" {
+		cfg.Version = buildVersion
+	}
 
 	logger := applogger.New(cfg.AppName, cfg.Env, cfg.LogLevel)
+
+	if isConfigCheckCommand(os.Args) {
+		logger.Info(
+			"backend config check passed",
+			slog.String("environment", cfg.Env),
+			slog.String("version", cfg.Version),
+			slog.Bool("worker_enabled", cfg.Worker.Enabled),
+			slog.Bool("rate_limit_enabled", cfg.RateLimit.Enabled),
+			slog.String("kyc_provider", cfg.Providers.KYCProvider),
+			slog.String("build_commit", buildCommit),
+			slog.String("build_date", buildDate),
+		)
+		return
+	}
 
 	if err := run(logger, cfg); err != nil {
 		logger.Error("api server exited with error", slog.String("error", err.Error()))
@@ -36,7 +60,20 @@ func main() {
 }
 
 func run(logger *slog.Logger, cfg config.Config) error {
-	healthService := service.NewHealthService(cfg.AppName, cfg.Env, cfg.Version)
+	healthService := service.NewHealthService(cfg.AppName, cfg.Env, cfg.Version, readinessChecks(cfg)...)
+	logger.Info(
+		"backend runtime configured",
+		slog.String("environment", cfg.Env),
+		slog.String("version", cfg.Version),
+		slog.Bool("worker_enabled", cfg.Worker.Enabled),
+		slog.Bool("worker_simulation_enabled", cfg.Worker.EnableSimulationProgression),
+		slog.Bool("rate_limit_enabled", cfg.RateLimit.Enabled),
+		slog.Bool("seeded_account_fallback", cfg.Features.EnableSeededAccountFallback),
+		slog.Bool("transaction_simulation_enabled", cfg.Features.EnableTransactionSimulation),
+		slog.String("kyc_provider", cfg.Providers.KYCProvider),
+		slog.String("build_commit", buildCommit),
+		slog.String("build_date", buildDate),
+	)
 	authService := service.NewSupabaseAuthService(logger, cfg.Supabase)
 	rateLimiter := middleware.NewRateLimiter(logger, cfg.RateLimit)
 	profileRepository := repository.NewSupabaseProfileRepository(logger, cfg.Supabase)
@@ -196,6 +233,64 @@ func run(logger *slog.Logger, cfg config.Config) error {
 	logger.Info("api server stopped gracefully")
 
 	return nil
+}
+
+func isConfigCheckCommand(args []string) bool {
+	if len(args) < 2 {
+		return false
+	}
+
+	switch args[1] {
+	case "check-config", "--check-config":
+		return true
+	default:
+		return false
+	}
+}
+
+func readinessChecks(cfg config.Config) []model.ReadinessCheck {
+	workerDetail := "disabled"
+	if cfg.Worker.Enabled {
+		workerDetail = "enabled"
+	}
+
+	rateLimitDetail := "disabled"
+	if cfg.RateLimit.Enabled {
+		rateLimitDetail = "enabled"
+	}
+
+	return []model.ReadinessCheck{
+		{
+			Name:     "configuration",
+			Status:   "ok",
+			Critical: true,
+			Detail:   "configuration loaded and validated",
+		},
+		{
+			Name:     "supabase_rest_config",
+			Status:   "ok",
+			Critical: true,
+			Detail:   "Supabase REST endpoint configured",
+		},
+		{
+			Name:     "supabase_auth_config",
+			Status:   "ok",
+			Critical: true,
+			Detail:   "Supabase auth issuer and JWKS endpoints configured",
+		},
+		{
+			Name:     "worker",
+			Status:   "ok",
+			Critical: false,
+			Detail:   workerDetail,
+		},
+		{
+			Name:     "rate_limiter",
+			Status:   "ok",
+			Critical: false,
+			Detail:   rateLimitDetail,
+		},
+	}
 }
 
 func newIdentityProvider(logger *slog.Logger, cfg config.Config) (provider.IdentityVerifier, error) {

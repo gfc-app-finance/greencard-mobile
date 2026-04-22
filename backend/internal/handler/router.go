@@ -41,6 +41,8 @@ func NewRouter(
 	supportHandler := NewSupportHandler(logger, supportService)
 
 	publicMux.HandleFunc("GET /health", healthHandler.Get)
+	publicMux.HandleFunc("GET /live", healthHandler.Live)
+	publicMux.HandleFunc("GET /ready", healthHandler.Ready)
 	publicMux.HandleFunc("POST /webhooks/providers/{provider}", webhookHandler.HandleProviderEvent)
 	protectedMux.HandleFunc("GET /auth/session", authSessionHandler.Get)
 	protectedMux.HandleFunc("GET /profile", profileHandler.Get)
