@@ -77,6 +77,17 @@ jobs:
       - name: Build
         run: go build ./cmd/api
 
+      - name: Config validation smoke test
+        env:
+          APP_ENV: staging
+          APP_VERSION: ci
+          SUPABASE_URL: https://placeholder.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: placeholder-service-role
+        run: go run ./cmd/api check-config
+
+      - name: Docker build validation
+        run: docker build --build-arg APP_VERSION=ci --build-arg APP_COMMIT=${{ github.sha }} --build-arg BUILD_DATE=ci -t greencard-api-ci .
+
   quality:
     runs-on: ubuntu-latest
     permissions:

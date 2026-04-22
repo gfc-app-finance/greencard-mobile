@@ -10,6 +10,7 @@ import (
 )
 
 const requestIDHeader = "X-Request-ID"
+const correlationIDHeader = "X-Correlation-ID"
 
 type contextKey string
 
@@ -19,10 +20,14 @@ func RequestID(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestID := r.Header.Get(requestIDHeader)
 		if requestID == "" {
+			requestID = r.Header.Get(correlationIDHeader)
+		}
+		if requestID == "" {
 			requestID = newRequestID()
 		}
 
 		w.Header().Set(requestIDHeader, requestID)
+		w.Header().Set(correlationIDHeader, requestID)
 
 		ctx := context.WithValue(r.Context(), requestIDContextKey, requestID)
 		next.ServeHTTP(w, r.WithContext(ctx))

@@ -31,25 +31,32 @@ type DefaultAccountService struct {
 	repository   repository.AccountRepository
 	seedProvider AccountSeedProvider
 	permissions  PermissionHelper
+	allowSeeded  bool
 }
 
-func NewAccountService(logger *slog.Logger, repository repository.AccountRepository, permissions PermissionHelper) AccountService {
+func NewAccountService(logger *slog.Logger, repository repository.AccountRepository, permissions PermissionHelper, allowSeededFallback bool) AccountService {
 	return &DefaultAccountService{
 		logger:       logger,
 		repository:   repository,
 		seedProvider: NewSeededAccountProvider(),
 		permissions:  permissions,
+		allowSeeded:  allowSeededFallback,
 	}
 }
 
 func (s *DefaultAccountService) ListAccounts(ctx context.Context, user model.AuthenticatedUser) (model.AccountListResponse, error) {
 	records, err := s.repository.ListByUserID(ctx, user.ID)
 	if err != nil {
-		s.logger.Warn("failed to list accounts from supabase, falling back to seeded accounts", slog.String("user_id", user.ID), slog.String("error", err.Error()))
-		records = s.seedProvider.ListByUserID(user.ID)
+		if s.allowSeeded {
+			s.logger.Warn("failed to list accounts from supabase, falling back to seeded accounts", slog.String("user_id", user.ID), slog.String("error", err.Error()))
+			records = s.seedProvider.ListByUserID(user.ID)
+		} else {
+			s.logger.Error("failed to list accounts from supabase", slog.String("user_id", user.ID), slog.String("error", err.Error()))
+			return model.AccountListResponse{}, ErrAccountsUnavailable
+		}
 	}
 
-	if len(records) == 0 {
+	if len(records) == 0 && s.allowSeeded {
 		records = s.seedProvider.ListByUserID(user.ID)
 	}
 
@@ -78,18 +85,24 @@ func (s *DefaultAccountService) GetAccount(ctx context.Context, user model.Authe
 
 	record, found, err := s.repository.GetByIDForUser(ctx, user.ID, accountID)
 	if err != nil {
-		s.logger.Warn("failed to fetch account detail from supabase, falling back to seeded accounts", slog.String("user_id", user.ID), slog.String("account_id", accountID), slog.String("error", err.Error()))
-		record, found = s.seedProvider.GetByIDForUser(user.ID, accountID)
-		if !found {
-			return model.AccountDetailResponse{}, ErrAccountNotFound
+		if s.allowSeeded {
+			s.logger.Warn("failed to fetch account detail from supabase, falling back to seeded accounts", slog.String("user_id", user.ID), slog.String("account_id", accountID), slog.String("error", err.Error()))
+			record, found = s.seedProvider.GetByIDForUser(user.ID, accountID)
+			if !found {
+				return model.AccountDetailResponse{}, ErrAccountNotFound
+			}
+		} else {
+			s.logger.Error("failed to fetch account detail from supabase", slog.String("user_id", user.ID), slog.String("account_id", accountID), slog.String("error", err.Error()))
+			return model.AccountDetailResponse{}, ErrAccountsUnavailable
 		}
 	}
 
-	if !found {
+	if !found && s.allowSeeded {
 		record, found = s.seedProvider.GetByIDForUser(user.ID, accountID)
-		if !found {
-			return model.AccountDetailResponse{}, ErrAccountNotFound
-		}
+	}
+
+	if !found {
+		return model.AccountDetailResponse{}, ErrAccountNotFound
 	}
 
 	if !s.permissions.CanAccessAccount(user, record) {

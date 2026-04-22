@@ -14,11 +14,16 @@ func NewRouter(
 	healthService service.HealthService,
 	authService service.AuthService,
 	profileService service.ProfileService,
+	identityVerificationService service.IdentityVerificationService,
 	accountService service.AccountService,
 	transactionService service.TransactionService,
+	idempotencyService service.IdempotencyService,
+	webhookService service.WebhookService,
 	activityService service.ActivityService,
 	recipientService service.RecipientService,
 	supportService service.SupportService,
+	enableTransactionSimulation bool,
+	rateLimiter *middleware.RateLimiter,
 ) http.Handler {
 	publicMux := http.NewServeMux()
 	protectedMux := http.NewServeMux()
@@ -27,16 +32,22 @@ func NewRouter(
 	healthHandler := NewHealthHandler(logger, healthService)
 	authSessionHandler := NewAuthSessionHandler(logger)
 	profileHandler := NewProfileHandler(logger, profileService)
+	verificationHandler := NewVerificationHandler(logger, identityVerificationService)
 	accountHandler := NewAccountHandler(logger, accountService)
-	transactionHandler := NewTransactionHandler(logger, transactionService)
+	transactionHandler := NewTransactionHandler(logger, transactionService, idempotencyService)
+	webhookHandler := NewWebhookHandler(logger, webhookService)
 	activityHandler := NewActivityHandler(logger, activityService)
 	recipientHandler := NewRecipientHandler(logger, recipientService)
 	supportHandler := NewSupportHandler(logger, supportService)
 
 	publicMux.HandleFunc("GET /health", healthHandler.Get)
+	publicMux.HandleFunc("GET /live", healthHandler.Live)
+	publicMux.HandleFunc("GET /ready", healthHandler.Ready)
+	publicMux.HandleFunc("POST /webhooks/providers/{provider}", webhookHandler.HandleProviderEvent)
 	protectedMux.HandleFunc("GET /auth/session", authSessionHandler.Get)
 	protectedMux.HandleFunc("GET /profile", profileHandler.Get)
 	protectedMux.HandleFunc("PATCH /profile", profileHandler.Patch)
+	protectedMux.HandleFunc("POST /verification/identity", verificationHandler.SubmitIdentity)
 	protectedMux.HandleFunc("GET /accounts", accountHandler.List)
 	protectedMux.HandleFunc("GET /accounts/{id}", accountHandler.Get)
 	protectedMux.HandleFunc("GET /activity", activityHandler.List)
@@ -58,13 +69,20 @@ func NewRouter(
 	protectedMux.HandleFunc("POST /transactions/payments", transactionHandler.CreatePayment)
 	protectedMux.HandleFunc("GET /transactions/payments", transactionHandler.ListPayments)
 	protectedMux.HandleFunc("GET /transactions/payments/{id}", transactionHandler.GetPayment)
+	if enableTransactionSimulation {
+		protectedMux.HandleFunc("POST /transactions/funding/{id}/simulate/advance", transactionHandler.SimulateAdvanceFunding)
+		protectedMux.HandleFunc("POST /transactions/transfers/{id}/simulate/advance", transactionHandler.SimulateAdvanceTransfer)
+		protectedMux.HandleFunc("POST /transactions/payments/{id}/simulate/advance", transactionHandler.SimulateAdvancePayment)
+	}
 	rootMux.Handle("/", withJSONNotFound(publicMux))
 	rootMux.Handle(
 		"/v1/",
 		http.StripPrefix(
 			"/v1",
 			middleware.RequireAuth(logger, authService)(
-				withJSONNotFound(protectedMux),
+				middleware.RateLimit(logger, rateLimiter, middleware.RateLimitScopeAuthenticated)(
+					withJSONNotFound(protectedMux),
+				),
 			),
 		),
 	)
@@ -74,6 +92,7 @@ func NewRouter(
 		middleware.RequestID,
 		middleware.SecurityHeaders,
 		middleware.RequestLogger(logger),
+		middleware.RateLimit(logger, rateLimiter, middleware.RateLimitScopeGlobal),
 		middleware.Recover(logger),
 	)
 }

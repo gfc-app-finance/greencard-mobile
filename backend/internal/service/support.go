@@ -28,45 +28,57 @@ type DefaultSupportService struct {
 	logger       *slog.Logger
 	ticketRepo   repository.SupportTicketRepository
 	messageRepo  repository.SupportTicketMessageRepository
-	profileRepo  repository.ProfileRepository
 	fundingRepo  repository.FundingTransactionRepository
 	transferRepo repository.TransferTransactionRepository
 	paymentRepo  repository.PaymentTransactionRepository
 	permissions  PermissionHelper
 	activities   ActivityEventRecorder
+	verification VerificationResolver
+	audit        AuditRecorder
 }
 
 func NewSupportService(
 	logger *slog.Logger,
 	ticketRepo repository.SupportTicketRepository,
 	messageRepo repository.SupportTicketMessageRepository,
-	profileRepo repository.ProfileRepository,
 	fundingRepo repository.FundingTransactionRepository,
 	transferRepo repository.TransferTransactionRepository,
 	paymentRepo repository.PaymentTransactionRepository,
 	permissions PermissionHelper,
 	activities ActivityEventRecorder,
+	verification VerificationResolver,
+	auditors ...AuditRecorder,
 ) SupportService {
+	var audit AuditRecorder
+	if len(auditors) > 0 {
+		audit = auditors[0]
+	}
+
 	return &DefaultSupportService{
 		logger:       logger,
 		ticketRepo:   ticketRepo,
 		messageRepo:  messageRepo,
-		profileRepo:  profileRepo,
 		fundingRepo:  fundingRepo,
 		transferRepo: transferRepo,
 		paymentRepo:  paymentRepo,
 		permissions:  permissions,
 		activities:   activities,
+		verification: verification,
+		audit:        audit,
 	}
 }
 
 func (s *DefaultSupportService) CreateTicket(ctx context.Context, user model.AuthenticatedUser, input model.CreateSupportTicketInput) (model.SupportTicketResponse, error) {
-	status, err := s.currentVerificationStatus(ctx, user.ID)
+	status, err := s.verification.ResolveForUser(ctx, user.ID)
 	if err != nil {
 		return model.SupportTicketResponse{}, ErrSupportUnavailable
 	}
 
 	if !s.permissions.CanCreateSupportTicket(status) {
+		s.recordAudit(ctx, user.ID, model.AuditActionPermissionDenied, model.AuditEntityPermission, user.ID, map[string]any{
+			"permission":          "support_ticket.create",
+			"verification_status": status,
+		})
 		return model.SupportTicketResponse{}, ErrSupportPermissionDenied
 	}
 
@@ -85,6 +97,13 @@ func (s *DefaultSupportService) CreateTicket(ctx context.Context, user model.Aut
 	}
 
 	s.syncTicketCreatedActivity(ctx, user.ID, savedRecord)
+	s.recordAudit(ctx, user.ID, model.AuditActionSupportTicketCreated, model.AuditEntitySupportTicket, savedRecord.ID, map[string]any{
+		"issue_type":         savedRecord.IssueType,
+		"status":             savedRecord.Status,
+		"priority":           savedRecord.Priority,
+		"linked_entity_type": savedRecord.LinkedEntityType,
+		"linked_entity_id":   savedRecord.LinkedEntityID,
+	})
 
 	return model.SupportTicketResponse{Ticket: buildSupportTicket(savedRecord)}, nil
 }
@@ -178,23 +197,6 @@ func (s *DefaultSupportService) getTicketForUser(ctx context.Context, userID, ti
 	}
 
 	return record, nil
-}
-
-func (s *DefaultSupportService) currentVerificationStatus(ctx context.Context, userID string) (model.VerificationStatus, error) {
-	record, found, err := s.profileRepo.GetByUserID(ctx, userID)
-	if err != nil {
-		s.logger.Error("failed to resolve verification status for support", slog.String("user_id", userID), slog.String("error", err.Error()))
-		return "", err
-	}
-
-	if !found {
-		record = model.ProfileRecord{
-			ID:                 userID,
-			VerificationStatus: model.VerificationStatusBasic,
-		}
-	}
-
-	return ResolveVerificationStatus(record.VerificationStatus, record), nil
 }
 
 func (s *DefaultSupportService) validateCreateTicketInput(ctx context.Context, userID string, input model.CreateSupportTicketInput) (model.SupportTicketRecord, ValidationErrors, error) {
@@ -357,5 +359,22 @@ func (s *DefaultSupportService) syncTicketCreatedActivity(ctx context.Context, u
 
 	if err := s.activities.RecordSupportTicketCreated(ctx, userID, record); err != nil {
 		s.logger.Warn("failed to sync support ticket activity", slog.String("user_id", userID), slog.String("ticket_id", record.ID), slog.String("error", err.Error()))
+	}
+}
+
+func (s *DefaultSupportService) recordAudit(ctx context.Context, actorUserID string, action model.AuditAction, entityType model.AuditEntityType, entityID string, metadata map[string]any) {
+	if s.audit == nil {
+		return
+	}
+
+	if err := s.audit.Record(ctx, model.AuditEvent{
+		ActorUserID: actorUserID,
+		Action:      action,
+		EntityType:  entityType,
+		EntityID:    entityID,
+		Source:      model.AuditSourceAPI,
+		Metadata:    metadata,
+	}); err != nil {
+		s.logger.Warn("failed to record support audit event", slog.String("user_id", actorUserID), slog.String("action", string(action)), slog.String("error", err.Error()))
 	}
 }

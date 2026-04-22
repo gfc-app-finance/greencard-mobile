@@ -1,6 +1,8 @@
 package service
 
 import (
+	"context"
+	"log/slog"
 	"time"
 
 	"github.com/gfc-app-finance/greencard-mobile/backend/internal/model"
@@ -67,4 +69,99 @@ func elapsedSince(timestamp *time.Time) time.Duration {
 	}
 
 	return time.Since(*timestamp)
+}
+
+func (s *DefaultTransactionService) SimulateAdvanceFunding(ctx context.Context, user model.AuthenticatedUser, transactionID string) (model.FundingTransactionResponse, error) {
+	record, found, err := s.fundingRepo.GetFundingByIDForUser(ctx, user.ID, transactionID)
+	if err != nil {
+		s.logger.Error("failed to fetch funding transaction for simulated transition", slog.String("user_id", user.ID), slog.String("transaction_id", transactionID), slog.String("error", err.Error()))
+		return model.FundingTransactionResponse{}, ErrFundingTransactionsUnavailable
+	}
+	if !found || !s.permissions.CanAccessFundingTransaction(user, record) {
+		return model.FundingTransactionResponse{}, ErrFundingTransactionNotFound
+	}
+
+	return s.UpdateFundingStatus(
+		ctx,
+		user,
+		transactionID,
+		simulateFundingStatusTransition(record.Status),
+		model.TransactionStatusSourceSimulation,
+		optionalStringPointer("advanced by non-production simulation"),
+	)
+}
+
+func (s *DefaultTransactionService) SimulateAdvanceTransfer(ctx context.Context, user model.AuthenticatedUser, transactionID string) (model.TransferTransactionResponse, error) {
+	record, found, err := s.transferRepo.GetTransferByIDForUser(ctx, user.ID, transactionID)
+	if err != nil {
+		s.logger.Error("failed to fetch transfer transaction for simulated transition", slog.String("user_id", user.ID), slog.String("transaction_id", transactionID), slog.String("error", err.Error()))
+		return model.TransferTransactionResponse{}, ErrTransferTransactionsUnavailable
+	}
+	if !found || !s.permissions.CanAccessTransferTransaction(user, record) {
+		return model.TransferTransactionResponse{}, ErrTransferTransactionNotFound
+	}
+
+	return s.UpdateTransferStatus(
+		ctx,
+		user,
+		transactionID,
+		simulateTransferStatusTransition(record.Status),
+		model.TransactionStatusSourceSimulation,
+		optionalStringPointer("advanced by non-production simulation"),
+	)
+}
+
+func (s *DefaultTransactionService) SimulateAdvancePayment(ctx context.Context, user model.AuthenticatedUser, transactionID string) (model.PaymentTransactionResponse, error) {
+	record, found, err := s.paymentRepo.GetPaymentByIDForUser(ctx, user.ID, transactionID)
+	if err != nil {
+		s.logger.Error("failed to fetch payment transaction for simulated transition", slog.String("user_id", user.ID), slog.String("transaction_id", transactionID), slog.String("error", err.Error()))
+		return model.PaymentTransactionResponse{}, ErrPaymentTransactionsUnavailable
+	}
+	if !found || !s.permissions.CanAccessPaymentTransaction(user, record) {
+		return model.PaymentTransactionResponse{}, ErrPaymentTransactionNotFound
+	}
+
+	return s.UpdatePaymentStatus(
+		ctx,
+		user,
+		transactionID,
+		simulatePaymentStatusTransition(record.Status),
+		model.TransactionStatusSourceSimulation,
+		optionalStringPointer("advanced by non-production simulation"),
+	)
+}
+
+func simulateFundingStatusTransition(status model.FundingStatus) model.FundingStatus {
+	switch status {
+	case model.FundingStatusInitiated:
+		return model.FundingStatusPending
+	case model.FundingStatusPending:
+		return model.FundingStatusCompleted
+	default:
+		return status
+	}
+}
+
+func simulateTransferStatusTransition(status model.TransferStatus) model.TransferStatus {
+	switch status {
+	case model.TransferStatusInitiated:
+		return model.TransferStatusConverting
+	case model.TransferStatusConverting:
+		return model.TransferStatusCompleted
+	default:
+		return status
+	}
+}
+
+func simulatePaymentStatusTransition(status model.PaymentStatus) model.PaymentStatus {
+	switch status {
+	case model.PaymentStatusSubmitted:
+		return model.PaymentStatusUnderReview
+	case model.PaymentStatusUnderReview:
+		return model.PaymentStatusProcessing
+	case model.PaymentStatusProcessing:
+		return model.PaymentStatusCompleted
+	default:
+		return status
+	}
 }

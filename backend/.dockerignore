@@ -1,5 +1,9 @@
 .env
+.env.*
 bin/
 .git
 .github
-README.md
+coverage/
+*.out
+*.test
+api
