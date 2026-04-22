@@ -35,6 +35,7 @@ type DefaultWebhookService struct {
 	providers    map[string]WebhookProviderAdapter
 	events       repository.WebhookEventRepository
 	transactions TransactionLifecycleUpdateService
+	audit        AuditRecorder
 }
 
 func NewWebhookService(
@@ -64,6 +65,21 @@ func NewWebhookService(
 	}
 }
 
+func NewWebhookServiceWithAudit(
+	logger *slog.Logger,
+	events repository.WebhookEventRepository,
+	transactions TransactionLifecycleUpdateService,
+	audit AuditRecorder,
+	providers ...WebhookProviderAdapter,
+) WebhookService {
+	service := NewWebhookService(logger, events, transactions, providers...)
+	if typed, ok := service.(*DefaultWebhookService); ok {
+		typed.audit = audit
+	}
+
+	return service
+}
+
 func (s *DefaultWebhookService) HandleProviderWebhook(ctx context.Context, provider string, headers http.Header, body []byte) (model.WebhookHandleResult, error) {
 	adapter, ok := s.providers[strings.ToLower(strings.TrimSpace(provider))]
 	if !ok {
@@ -71,11 +87,27 @@ func (s *DefaultWebhookService) HandleProviderWebhook(ctx context.Context, provi
 	}
 
 	if err := adapter.Verify(headers, body); err != nil {
+		s.recordWebhookAudit(ctx, model.AuditActionWebhookVerificationRejected, model.AuditSourceProvider, model.AuditEvent{
+			EntityType: model.AuditEntityWebhookEvent,
+			Provider:   string(adapter.Name()),
+			Metadata: map[string]any{
+				"provider": string(adapter.Name()),
+				"outcome":  "verification_failed",
+			},
+		})
 		return model.WebhookHandleResult{}, err
 	}
 
 	event, err := adapter.Parse(body)
 	if err != nil {
+		s.recordWebhookAudit(ctx, model.AuditActionWebhookProcessingFailed, model.AuditSourceProvider, model.AuditEvent{
+			EntityType: model.AuditEntityWebhookEvent,
+			Provider:   string(adapter.Name()),
+			Metadata: map[string]any{
+				"provider": string(adapter.Name()),
+				"outcome":  "invalid_payload",
+			},
+		})
 		return model.WebhookHandleResult{}, err
 	}
 
@@ -94,13 +126,17 @@ func (s *DefaultWebhookService) HandleProviderWebhook(ctx context.Context, provi
 		}, nil
 	}
 
+	s.auditProviderEvent(ctx, model.AuditActionWebhookProcessingReceived, record, event, "received")
 	linkedEntityID, processErr := s.applyWebhookEvent(ctx, event)
 	if processErr != nil {
 		s.markWebhookEventFailed(ctx, record.ID, processErr)
+		s.auditProviderEvent(ctx, model.AuditActionWebhookProcessingFailed, record, event, safeWebhookFailureMessage(processErr))
 		return model.WebhookHandleResult{}, processErr
 	}
 
 	s.markWebhookEventProcessed(ctx, record.ID, event, linkedEntityID)
+	record.LinkedEntityID = optionalStringPointer(linkedEntityID)
+	s.auditProviderEvent(ctx, model.AuditActionWebhookProcessingSucceeded, record, event, "processed")
 
 	s.logger.Info("processed provider webhook event", slog.String("provider", string(event.Provider)), slog.String("event_id", event.EventID), slog.String("event_type", event.EventType), slog.String("reference", event.Reference), slog.String("linked_entity_id", linkedEntityID))
 
@@ -109,6 +145,41 @@ func (s *DefaultWebhookService) HandleProviderWebhook(ctx context.Context, provi
 		EventID:  event.EventID,
 		Status:   "processed",
 	}, nil
+}
+
+func (s *DefaultWebhookService) auditProviderEvent(ctx context.Context, action model.AuditAction, record model.WebhookEventRecord, event model.ProviderWebhookEvent, outcome string) {
+	s.recordWebhookAudit(ctx, action, model.AuditSourceProvider, model.AuditEvent{
+		Action:        action,
+		EntityType:    model.AuditEntityWebhookEvent,
+		EntityID:      record.ID,
+		Source:        model.AuditSourceProvider,
+		Provider:      string(event.Provider),
+		CorrelationID: event.EventID,
+		Metadata: map[string]any{
+			"provider":           event.Provider,
+			"event_id":           event.EventID,
+			"event_type":         event.EventType,
+			"linked_entity_type": event.LinkedEntityType,
+			"linked_entity_id":   record.LinkedEntityID,
+			"linked_reference":   event.Reference,
+			"outcome":            outcome,
+		},
+	})
+}
+
+func (s *DefaultWebhookService) recordWebhookAudit(ctx context.Context, action model.AuditAction, source model.AuditSource, event model.AuditEvent) {
+	if s.audit == nil {
+		return
+	}
+
+	event.Action = action
+	event.Source = source
+	if event.EntityType == "" {
+		event.EntityType = model.AuditEntityWebhookEvent
+	}
+	if err := s.audit.Record(ctx, event); err != nil {
+		s.logger.Warn("failed to record webhook audit event", slog.String("action", string(action)), slog.String("provider", event.Provider), slog.String("error", err.Error()))
+	}
 }
 
 func (s *DefaultWebhookService) registerWebhookEvent(ctx context.Context, event model.ProviderWebhookEvent) (model.WebhookEventRecord, bool, error) {

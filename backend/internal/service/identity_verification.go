@@ -32,6 +32,7 @@ type DefaultIdentityVerificationService struct {
 	permissions  PermissionHelper
 	verification VerificationResolver
 	provider     provider.IdentityVerifier
+	audit        AuditRecorder
 }
 
 func NewIdentityVerificationService(
@@ -40,9 +41,14 @@ func NewIdentityVerificationService(
 	permissions PermissionHelper,
 	verification VerificationResolver,
 	identityProvider provider.IdentityVerifier,
+	auditors ...AuditRecorder,
 ) IdentityVerificationService {
 	if logger == nil {
 		logger = slog.New(slog.NewTextHandler(io.Discard, nil))
+	}
+	var audit AuditRecorder
+	if len(auditors) > 0 {
+		audit = auditors[0]
 	}
 
 	return &DefaultIdentityVerificationService{
@@ -51,6 +57,7 @@ func NewIdentityVerificationService(
 		permissions:  permissions,
 		verification: verification,
 		provider:     identityProvider,
+		audit:        audit,
 	}
 }
 
@@ -76,7 +83,12 @@ func (s *DefaultIdentityVerificationService) SubmitIdentityVerification(ctx cont
 		}
 	}
 	profile.VerificationStatus = s.verification.NormalizeProfile(profile)
+	previousStatus := profile.VerificationStatus
 	if profile.VerificationStatus == model.VerificationStatusRestricted {
+		s.recordAudit(ctx, user.ID, model.AuditActionPermissionDenied, model.AuditEntityVerification, user.ID, model.AuditSourceAPI, map[string]any{
+			"permission":          "identity_verification.submit",
+			"verification_status": profile.VerificationStatus,
+		}, "")
 		return model.IdentityVerificationResponse{}, ErrIdentityVerificationDenied
 	}
 
@@ -95,6 +107,11 @@ func (s *DefaultIdentityVerificationService) SubmitIdentityVerification(ctx cont
 	})
 	if err != nil {
 		s.logger.Warn("identity provider verification failed", slog.String("user_id", user.ID), slog.String("provider", "identity"), slog.String("error", err.Error()))
+		s.recordAudit(ctx, user.ID, model.AuditActionVerificationProviderFailed, model.AuditEntityVerification, user.ID, model.AuditSourceProvider, map[string]any{
+			"provider": "identity",
+			"outcome":  "provider_error",
+			"error":    mapIdentityProviderError(err).Error(),
+		}, "identity")
 		return model.IdentityVerificationResponse{}, mapIdentityProviderError(err)
 	}
 
@@ -112,6 +129,17 @@ func (s *DefaultIdentityVerificationService) SubmitIdentityVerification(ctx cont
 		return model.IdentityVerificationResponse{}, ErrIdentityVerificationUnavailable
 	}
 	updatedProfile.VerificationStatus = s.verification.NormalizeProfile(updatedProfile)
+	if previousStatus != updatedProfile.VerificationStatus {
+		s.recordAudit(ctx, user.ID, model.AuditActionVerificationStatusChanged, model.AuditEntityVerification, user.ID, model.AuditSourceProvider, map[string]any{
+			"status_before":      previousStatus,
+			"status_after":       updatedProfile.VerificationStatus,
+			"provider":           result.Provider,
+			"provider_reference": result.ProviderReference,
+			"partner_job_id":     result.PartnerJobID,
+			"decision":           string(result.Decision),
+			"result_code":        result.ResultCode,
+		}, result.Provider)
+	}
 
 	profileResponse := buildProfileResponse(user, updatedProfile, s.permissions)
 
@@ -128,6 +156,24 @@ func (s *DefaultIdentityVerificationService) SubmitIdentityVerification(ctx cont
 		Profile:     profileResponse.Profile,
 		Permissions: profileResponse.Permissions,
 	}, nil
+}
+
+func (s *DefaultIdentityVerificationService) recordAudit(ctx context.Context, actorUserID string, action model.AuditAction, entityType model.AuditEntityType, entityID string, source model.AuditSource, metadata map[string]any, providerName string) {
+	if s.audit == nil {
+		return
+	}
+
+	if err := s.audit.Record(ctx, model.AuditEvent{
+		ActorUserID: actorUserID,
+		Action:      action,
+		EntityType:  entityType,
+		EntityID:    entityID,
+		Source:      source,
+		Metadata:    metadata,
+		Provider:    providerName,
+	}); err != nil {
+		s.logger.Warn("failed to record identity verification audit event", slog.String("user_id", actorUserID), slog.String("action", string(action)), slog.String("error", err.Error()))
+	}
 }
 
 func validateSubmitIdentityVerificationInput(input model.SubmitIdentityVerificationInput) (model.SubmitIdentityVerificationInput, ValidationErrors) {

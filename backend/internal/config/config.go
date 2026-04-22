@@ -22,6 +22,7 @@ type Config struct {
 	Webhooks  WebhookConfig
 	Providers ProviderConfig
 	Worker    WorkerConfig
+	RateLimit RateLimitConfig
 	HTTP      HTTPConfig
 }
 
@@ -45,6 +46,7 @@ type SupabaseConfig struct {
 	AccountTable         string
 	ActivityTable        string
 	BalanceMovementTable string
+	AuditLogTable        string
 	WebhookEventTable    string
 	FundingTable         string
 	TransferTable        string
@@ -90,6 +92,19 @@ type WorkerConfig struct {
 	PaymentProcessingTimeout    time.Duration
 }
 
+type RateLimitConfig struct {
+	Enabled               bool
+	TrustProxyHeaders     bool
+	GlobalRequests        int
+	GlobalWindow          time.Duration
+	AuthenticatedRequests int
+	AuthenticatedWindow   time.Duration
+	SensitiveRequests     int
+	SensitiveWindow       time.Duration
+	WebhookRequests       int
+	WebhookWindow         time.Duration
+}
+
 type HTTPConfig struct {
 	ReadTimeout     time.Duration
 	WriteTimeout    time.Duration
@@ -118,6 +133,7 @@ func Load() (Config, error) {
 			AccountTable:         getEnv("SUPABASE_ACCOUNT_TABLE", "accounts"),
 			ActivityTable:        getEnv("SUPABASE_ACTIVITY_TABLE", "activities"),
 			BalanceMovementTable: getEnv("SUPABASE_BALANCE_MOVEMENT_TABLE", "account_balance_movements"),
+			AuditLogTable:        getEnv("SUPABASE_AUDIT_LOG_TABLE", "audit_logs"),
 			WebhookEventTable:    getEnv("SUPABASE_WEBHOOK_EVENT_TABLE", "provider_webhook_events"),
 			FundingTable:         getEnv("SUPABASE_FUNDING_TABLE", "funding_transactions"),
 			TransferTable:        getEnv("SUPABASE_TRANSFER_TABLE", "transfer_transactions"),
@@ -242,6 +258,46 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 
+	rateLimitGlobalRequests, err := parsePositiveIntEnv("RATE_LIMIT_GLOBAL_REQUESTS", 300)
+	if err != nil {
+		return Config{}, err
+	}
+
+	rateLimitAuthenticatedRequests, err := parsePositiveIntEnv("RATE_LIMIT_AUTHENTICATED_REQUESTS", 900)
+	if err != nil {
+		return Config{}, err
+	}
+
+	rateLimitSensitiveRequests, err := parsePositiveIntEnv("RATE_LIMIT_SENSITIVE_REQUESTS", 20)
+	if err != nil {
+		return Config{}, err
+	}
+
+	rateLimitWebhookRequests, err := parsePositiveIntEnv("RATE_LIMIT_WEBHOOK_REQUESTS", 120)
+	if err != nil {
+		return Config{}, err
+	}
+
+	rateLimitGlobalWindow, err := parseDurationEnv("RATE_LIMIT_GLOBAL_WINDOW", time.Minute)
+	if err != nil {
+		return Config{}, err
+	}
+
+	rateLimitAuthenticatedWindow, err := parseDurationEnv("RATE_LIMIT_AUTHENTICATED_WINDOW", time.Minute)
+	if err != nil {
+		return Config{}, err
+	}
+
+	rateLimitSensitiveWindow, err := parseDurationEnv("RATE_LIMIT_SENSITIVE_WINDOW", time.Minute)
+	if err != nil {
+		return Config{}, err
+	}
+
+	rateLimitWebhookWindow, err := parseDurationEnv("RATE_LIMIT_WEBHOOK_WINDOW", time.Minute)
+	if err != nil {
+		return Config{}, err
+	}
+
 	cfg.HTTP = HTTPConfig{
 		ReadTimeout:     readTimeout,
 		WriteTimeout:    writeTimeout,
@@ -277,6 +333,18 @@ func Load() (Config, error) {
 		PaymentSubmittedTimeout:     paymentSubmittedTimeout,
 		PaymentUnderReviewTimeout:   paymentUnderReviewTimeout,
 		PaymentProcessingTimeout:    paymentProcessingTimeout,
+	}
+	cfg.RateLimit = RateLimitConfig{
+		Enabled:               getBoolEnv("RATE_LIMIT_ENABLED", true),
+		TrustProxyHeaders:     getBoolEnv("RATE_LIMIT_TRUST_PROXY_HEADERS", false),
+		GlobalRequests:        rateLimitGlobalRequests,
+		GlobalWindow:          rateLimitGlobalWindow,
+		AuthenticatedRequests: rateLimitAuthenticatedRequests,
+		AuthenticatedWindow:   rateLimitAuthenticatedWindow,
+		SensitiveRequests:     rateLimitSensitiveRequests,
+		SensitiveWindow:       rateLimitSensitiveWindow,
+		WebhookRequests:       rateLimitWebhookRequests,
+		WebhookWindow:         rateLimitWebhookWindow,
 	}
 
 	if err := validate(cfg); err != nil {
@@ -402,6 +470,18 @@ func validate(cfg Config) error {
 		return errors.New("worker configuration values must be greater than zero")
 	}
 
+	if cfg.RateLimit.Enabled &&
+		(cfg.RateLimit.GlobalRequests <= 0 ||
+			cfg.RateLimit.AuthenticatedRequests <= 0 ||
+			cfg.RateLimit.SensitiveRequests <= 0 ||
+			cfg.RateLimit.WebhookRequests <= 0 ||
+			cfg.RateLimit.GlobalWindow <= 0 ||
+			cfg.RateLimit.AuthenticatedWindow <= 0 ||
+			cfg.RateLimit.SensitiveWindow <= 0 ||
+			cfg.RateLimit.WebhookWindow <= 0) {
+		return errors.New("rate limit configuration values must be greater than zero when rate limiting is enabled")
+	}
+
 	if !isSafeIdentifier(cfg.Supabase.ProfileTable) {
 		return fmt.Errorf("invalid SUPABASE_PROFILE_TABLE %q", cfg.Supabase.ProfileTable)
 	}
@@ -416,6 +496,10 @@ func validate(cfg Config) error {
 
 	if !isSafeIdentifier(cfg.Supabase.BalanceMovementTable) {
 		return fmt.Errorf("invalid SUPABASE_BALANCE_MOVEMENT_TABLE %q", cfg.Supabase.BalanceMovementTable)
+	}
+
+	if !isSafeIdentifier(cfg.Supabase.AuditLogTable) {
+		return fmt.Errorf("invalid SUPABASE_AUDIT_LOG_TABLE %q", cfg.Supabase.AuditLogTable)
 	}
 
 	if !isSafeIdentifier(cfg.Supabase.WebhookEventTable) {

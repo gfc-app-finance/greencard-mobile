@@ -41,6 +41,7 @@ func (s *DefaultTransactionService) applyFundingStatusTransition(
 	}
 	if changed {
 		s.syncFundingActivity(ctx, user.ID, updated)
+		s.auditFundingStatusChange(ctx, user.ID, record, updated, source)
 	}
 
 	return model.FundingTransactionResponse{Transaction: buildFundingTransaction(updated)}, nil
@@ -84,6 +85,7 @@ func (s *DefaultTransactionService) UpdateFundingStatusByReference(
 	}
 	if changed {
 		s.syncFundingActivity(ctx, record.UserID, updated)
+		s.auditFundingStatusChange(ctx, record.UserID, record, updated, source)
 	}
 
 	return model.FundingTransactionResponse{Transaction: buildFundingTransaction(updated)}, nil
@@ -117,6 +119,7 @@ func (s *DefaultTransactionService) applyTransferStatusTransition(
 	}
 	if changed {
 		s.syncTransferActivity(ctx, user.ID, updated)
+		s.auditTransferStatusChange(ctx, user.ID, record, updated, source)
 	}
 
 	return model.TransferTransactionResponse{Transaction: buildTransferTransaction(updated)}, nil
@@ -160,6 +163,7 @@ func (s *DefaultTransactionService) UpdateTransferStatusByReference(
 	}
 	if changed {
 		s.syncTransferActivity(ctx, record.UserID, updated)
+		s.auditTransferStatusChange(ctx, record.UserID, record, updated, source)
 	}
 
 	return model.TransferTransactionResponse{Transaction: buildTransferTransaction(updated)}, nil
@@ -193,6 +197,7 @@ func (s *DefaultTransactionService) applyPaymentStatusTransition(
 	}
 	if changed {
 		s.syncPaymentActivity(ctx, user.ID, updated)
+		s.auditPaymentStatusChange(ctx, user.ID, record, updated, source)
 	}
 
 	return model.PaymentTransactionResponse{Transaction: buildPaymentTransaction(updated)}, nil
@@ -236,6 +241,7 @@ func (s *DefaultTransactionService) UpdatePaymentStatusByReference(
 	}
 	if changed {
 		s.syncPaymentActivity(ctx, record.UserID, updated)
+		s.auditPaymentStatusChange(ctx, record.UserID, record, updated, source)
 	}
 
 	return model.PaymentTransactionResponse{Transaction: buildPaymentTransaction(updated)}, nil
@@ -495,4 +501,74 @@ func buildStatusUpdatePayload(updatedAt time.Time, source model.TransactionStatu
 	}
 
 	return payload
+}
+
+func (s *DefaultTransactionService) auditFundingStatusChange(ctx context.Context, userID string, previous, updated model.FundingTransactionRecord, source model.TransactionStatusSource) {
+	auditSource := auditSourceFromTransactionSource(source)
+	s.recordAudit(ctx, userID, model.AuditActionTransactionStatusChanged, model.AuditEntityFundingTransaction, updated.ID, auditSource, map[string]any{
+		"status_before": previous.Status,
+		"status_after":  updated.Status,
+		"status_source": source,
+		"status_reason": updated.StatusReason,
+		"reference":     updated.Reference,
+		"account_id":    updated.AccountID,
+	})
+	if updated.Status == model.FundingStatusCompleted {
+		s.recordAudit(ctx, userID, model.AuditActionBalanceEffectApplied, model.AuditEntityFundingTransaction, updated.ID, auditSource, map[string]any{
+			"movement_type": model.BalanceMovementTypeFundingCredit,
+			"direction":     model.BalanceMovementDirectionCredit,
+			"account_id":    updated.AccountID,
+			"amount":        updated.Amount,
+			"currency":      updated.Currency,
+			"reference":     updated.Reference,
+		})
+	}
+}
+
+func (s *DefaultTransactionService) auditTransferStatusChange(ctx context.Context, userID string, previous, updated model.TransferTransactionRecord, source model.TransactionStatusSource) {
+	auditSource := auditSourceFromTransactionSource(source)
+	s.recordAudit(ctx, userID, model.AuditActionTransactionStatusChanged, model.AuditEntityTransferTransaction, updated.ID, auditSource, map[string]any{
+		"status_before":          previous.Status,
+		"status_after":           updated.Status,
+		"status_source":          source,
+		"status_reason":          updated.StatusReason,
+		"reference":              updated.Reference,
+		"source_account_id":      updated.SourceAccountID,
+		"destination_account_id": updated.DestinationAccountID,
+	})
+	if updated.Status == model.TransferStatusCompleted {
+		s.recordAudit(ctx, userID, model.AuditActionBalanceEffectApplied, model.AuditEntityTransferTransaction, updated.ID, auditSource, map[string]any{
+			"movement_types":         []string{string(model.BalanceMovementTypeTransferDebit), string(model.BalanceMovementTypeTransferCredit)},
+			"source_account_id":      updated.SourceAccountID,
+			"destination_account_id": updated.DestinationAccountID,
+			"source_amount":          updated.SourceAmount,
+			"source_currency":        updated.SourceCurrency,
+			"destination_amount":     updated.DestinationAmount,
+			"destination_currency":   updated.DestinationCurrency,
+			"reference":              updated.Reference,
+		})
+	}
+}
+
+func (s *DefaultTransactionService) auditPaymentStatusChange(ctx context.Context, userID string, previous, updated model.PaymentTransactionRecord, source model.TransactionStatusSource) {
+	auditSource := auditSourceFromTransactionSource(source)
+	s.recordAudit(ctx, userID, model.AuditActionTransactionStatusChanged, model.AuditEntityPaymentTransaction, updated.ID, auditSource, map[string]any{
+		"status_before":     previous.Status,
+		"status_after":      updated.Status,
+		"status_source":     source,
+		"status_reason":     updated.StatusReason,
+		"reference":         updated.Reference,
+		"source_account_id": updated.SourceAccountID,
+		"recipient_id":      updated.RecipientID,
+	})
+	if updated.Status == model.PaymentStatusCompleted {
+		s.recordAudit(ctx, userID, model.AuditActionBalanceEffectApplied, model.AuditEntityPaymentTransaction, updated.ID, auditSource, map[string]any{
+			"movement_type":     model.BalanceMovementTypePaymentDebit,
+			"direction":         model.BalanceMovementDirectionDebit,
+			"source_account_id": updated.SourceAccountID,
+			"amount":            updated.TotalAmount,
+			"currency":          updated.Currency,
+			"reference":         updated.Reference,
+		})
+	}
 }

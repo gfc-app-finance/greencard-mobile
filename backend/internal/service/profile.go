@@ -39,14 +39,21 @@ type DefaultProfileService struct {
 	repository   repository.ProfileRepository
 	permissions  PermissionHelper
 	verification VerificationResolver
+	audit        AuditRecorder
 }
 
-func NewProfileService(logger *slog.Logger, repository repository.ProfileRepository, permissions PermissionHelper, verification VerificationResolver) ProfileService {
+func NewProfileService(logger *slog.Logger, repository repository.ProfileRepository, permissions PermissionHelper, verification VerificationResolver, auditors ...AuditRecorder) ProfileService {
+	var audit AuditRecorder
+	if len(auditors) > 0 {
+		audit = auditors[0]
+	}
+
 	return &DefaultProfileService{
 		logger:       logger,
 		repository:   repository,
 		permissions:  permissions,
 		verification: verification,
+		audit:        audit,
 	}
 }
 
@@ -87,6 +94,8 @@ func (s *DefaultProfileService) UpdateCurrentProfile(ctx context.Context, user m
 			VerificationStatus: model.VerificationStatusBasic,
 		}
 	}
+	previousStatus := s.verification.NormalizeProfile(record)
+	updatedFields := updatedProfileFields(input)
 
 	mergedRecord := mergeProfileRecord(record, input)
 	mergedRecord.ID = user.ID
@@ -108,6 +117,19 @@ func (s *DefaultProfileService) UpdateCurrentProfile(ctx context.Context, user m
 	}
 
 	savedRecord.VerificationStatus = s.verification.NormalizeProfile(savedRecord)
+	s.recordAudit(ctx, model.AuditActionProfileUpdated, model.AuditEntityProfile, savedRecord.ID, map[string]any{
+		"fields_updated":               updatedFields,
+		"verification_status_before":   previousStatus,
+		"verification_status_after":    savedRecord.VerificationStatus,
+		"profile_completion_triggered": previousStatus != savedRecord.VerificationStatus,
+	})
+	if previousStatus != savedRecord.VerificationStatus {
+		s.recordAudit(ctx, model.AuditActionVerificationStatusChanged, model.AuditEntityVerification, savedRecord.ID, map[string]any{
+			"status_before": previousStatus,
+			"status_after":  savedRecord.VerificationStatus,
+			"reason":        "profile_update",
+		})
+	}
 
 	return buildProfileResponse(user, savedRecord, s.permissions), nil
 }
@@ -217,6 +239,41 @@ func mergeProfileRecord(existing model.ProfileRecord, input model.UpdateProfileI
 	}
 
 	return merged
+}
+
+func updatedProfileFields(input model.UpdateProfileInput) []string {
+	fields := make([]string, 0, 4)
+	if input.FullName != nil {
+		fields = append(fields, "full_name")
+	}
+	if input.DateOfBirth != nil {
+		fields = append(fields, "date_of_birth")
+	}
+	if input.ResidentialAddress != nil {
+		fields = append(fields, "residential_address")
+	}
+	if input.Nationality != nil {
+		fields = append(fields, "nationality")
+	}
+
+	return fields
+}
+
+func (s *DefaultProfileService) recordAudit(ctx context.Context, action model.AuditAction, entityType model.AuditEntityType, entityID string, metadata map[string]any) {
+	if s.audit == nil {
+		return
+	}
+
+	if err := s.audit.Record(ctx, model.AuditEvent{
+		ActorUserID: entityID,
+		Action:      action,
+		EntityType:  entityType,
+		EntityID:    entityID,
+		Source:      model.AuditSourceAPI,
+		Metadata:    metadata,
+	}); err != nil {
+		s.logger.Warn("failed to record profile audit event", slog.String("entity_id", entityID), slog.String("action", string(action)), slog.String("error", err.Error()))
+	}
 }
 
 func ResolveVerificationStatus(current model.VerificationStatus, profile model.ProfileRecord) model.VerificationStatus {

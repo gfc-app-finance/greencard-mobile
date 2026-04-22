@@ -28,6 +28,7 @@ type DefaultRecipientService struct {
 	repository   repository.RecipientRepository
 	permissions  PermissionHelper
 	verification VerificationResolver
+	audit        AuditRecorder
 }
 
 func NewRecipientService(
@@ -35,12 +36,19 @@ func NewRecipientService(
 	repository repository.RecipientRepository,
 	permissions PermissionHelper,
 	verification VerificationResolver,
+	auditors ...AuditRecorder,
 ) RecipientService {
+	var audit AuditRecorder
+	if len(auditors) > 0 {
+		audit = auditors[0]
+	}
+
 	return &DefaultRecipientService{
 		logger:       logger,
 		repository:   repository,
 		permissions:  permissions,
 		verification: verification,
+		audit:        audit,
 	}
 }
 
@@ -51,6 +59,10 @@ func (s *DefaultRecipientService) CreateRecipient(ctx context.Context, user mode
 	}
 
 	if !s.permissions.CanCreateRecipient(status) {
+		s.recordAudit(ctx, user.ID, model.AuditActionPermissionDenied, model.AuditEntityPermission, user.ID, map[string]any{
+			"permission":          "recipient.create",
+			"verification_status": status,
+		})
 		return model.RecipientResponse{}, ErrRecipientPermissionDenied
 	}
 
@@ -64,6 +76,13 @@ func (s *DefaultRecipientService) CreateRecipient(ctx context.Context, user mode
 		s.logger.Error("failed to create recipient", slog.String("user_id", user.ID), slog.String("error", err.Error()))
 		return model.RecipientResponse{}, ErrRecipientsUnavailable
 	}
+
+	s.recordAudit(ctx, user.ID, model.AuditActionRecipientCreated, model.AuditEntityRecipient, savedRecord.ID, map[string]any{
+		"recipient_type": savedRecord.Type,
+		"country":        savedRecord.Country,
+		"currency":       savedRecord.Currency,
+		"bank_name":      savedRecord.BankName,
+	})
 
 	return model.RecipientResponse{Recipient: buildRecipient(savedRecord)}, nil
 }
@@ -294,4 +313,21 @@ func isSortCode(value string) bool {
 	}
 
 	return value != ""
+}
+
+func (s *DefaultRecipientService) recordAudit(ctx context.Context, actorUserID string, action model.AuditAction, entityType model.AuditEntityType, entityID string, metadata map[string]any) {
+	if s.audit == nil {
+		return
+	}
+
+	if err := s.audit.Record(ctx, model.AuditEvent{
+		ActorUserID: actorUserID,
+		Action:      action,
+		EntityType:  entityType,
+		EntityID:    entityID,
+		Source:      model.AuditSourceAPI,
+		Metadata:    metadata,
+	}); err != nil {
+		s.logger.Warn("failed to record recipient audit event", slog.String("user_id", actorUserID), slog.String("action", string(action)), slog.String("error", err.Error()))
+	}
 }

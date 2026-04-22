@@ -66,6 +66,26 @@ For transaction writes:
 - do not log tokens, secrets, raw Supabase error payloads, full bank details, or full request bodies
 - prefer generic client errors and more specific internal logs only when they remain safe
 
+## Rate Limiting and Abuse Protection
+
+- keep global IP-based limiting enabled for all API traffic unless a local test explicitly disables it
+- keep authenticated `/v1` limiting user-keyed after Supabase auth so one noisy user does not consume another user's allowance
+- sensitive writes such as KYC submission, recipient creation, support ticket creation, transaction creation, profile updates, and simulation routes should use the tighter sensitive policy
+- provider webhook routes should use a dedicated public webhook policy and still verify signatures before processing payloads
+- do not log full IPs, tokens, or request bodies for rate-limit events; log policy, scope, path, request ID, and a hashed key only
+- only enable proxy-header trust when deployment infrastructure guarantees `X-Forwarded-For` or `X-Real-IP` cannot be spoofed by clients
+
+## Audit and Compliance Logging
+
+Audit logs are a durable compliance trail, not normal debugging logs.
+
+- use the centralized audit service for sensitive writes and lifecycle events
+- audit profile updates, verification state changes, recipient creation, transaction creation, transaction status changes, balance-affecting completions, support ticket creation, permission denials, and provider webhook outcomes
+- do not write audit records directly from HTTP handlers; handlers should call services and services should audit business outcomes
+- keep audit metadata summarized and minimal
+- never store tokens, secrets, raw provider payloads, raw account numbers, raw ID numbers, BVN/NIN values, PINs, OTPs, or authorization headers in audit metadata
+- audit failure should be logged safely and investigated, but normal user flows should avoid leaking audit persistence failures to clients
+
 ## Testing
 
 Backend tests should cover:
@@ -89,8 +109,10 @@ make check
 2. add repository methods for persistence
 3. add service logic for validation, permissions, and orchestration
 4. keep the handler thin and map errors cleanly
-5. add tests for validation, ownership, and denied paths
-6. update backend docs if the contract or workflow changed
+5. add audit logging for sensitive writes or permission-sensitive outcomes
+6. decide whether the route needs the sensitive rate-limit policy
+7. add tests for validation, ownership, denied paths, audit generation, and limiter behavior where relevant
+8. update backend docs if the contract or workflow changed
 
 ## Transaction Safety Notes
 
@@ -104,6 +126,7 @@ make check
 - when a transaction status changes, the corresponding activity item should be updated in the same service flow so feed state remains consistent
 - balance mutation should happen only on the right committed status, not on transaction creation
 - completion-side money mutation should create `account_balance_movements` records so there is a minimal audit trail for how balances changed
+- completion-side money mutation should also emit a compliance audit event through the audit service
 - repeated completion events must be safe: settlement should no-op if the matching balance movement already exists
 - final sufficient-balance checks belong in the completion/settlement path for debit flows, even if create-time validation already rejected obviously impossible requests
 - provider webhook handlers must verify signatures before parsing or trusting the event payload

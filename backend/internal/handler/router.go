@@ -23,6 +23,7 @@ func NewRouter(
 	recipientService service.RecipientService,
 	supportService service.SupportService,
 	enableTransactionSimulation bool,
+	rateLimiter *middleware.RateLimiter,
 ) http.Handler {
 	publicMux := http.NewServeMux()
 	protectedMux := http.NewServeMux()
@@ -77,7 +78,9 @@ func NewRouter(
 		http.StripPrefix(
 			"/v1",
 			middleware.RequireAuth(logger, authService)(
-				withJSONNotFound(protectedMux),
+				middleware.RateLimit(logger, rateLimiter, middleware.RateLimitScopeAuthenticated)(
+					withJSONNotFound(protectedMux),
+				),
 			),
 		),
 	)
@@ -87,6 +90,7 @@ func NewRouter(
 		middleware.RequestID,
 		middleware.SecurityHeaders,
 		middleware.RequestLogger(logger),
+		middleware.RateLimit(logger, rateLimiter, middleware.RateLimitScopeGlobal),
 		middleware.Recover(logger),
 	)
 }

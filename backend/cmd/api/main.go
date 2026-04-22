@@ -13,6 +13,7 @@ import (
 	"github.com/gfc-app-finance/greencard-mobile/backend/internal/config"
 	"github.com/gfc-app-finance/greencard-mobile/backend/internal/handler"
 	applogger "github.com/gfc-app-finance/greencard-mobile/backend/internal/logger"
+	"github.com/gfc-app-finance/greencard-mobile/backend/internal/middleware"
 	"github.com/gfc-app-finance/greencard-mobile/backend/internal/provider"
 	"github.com/gfc-app-finance/greencard-mobile/backend/internal/repository"
 	"github.com/gfc-app-finance/greencard-mobile/backend/internal/service"
@@ -37,6 +38,7 @@ func main() {
 func run(logger *slog.Logger, cfg config.Config) error {
 	healthService := service.NewHealthService(cfg.AppName, cfg.Env, cfg.Version)
 	authService := service.NewSupabaseAuthService(logger, cfg.Supabase)
+	rateLimiter := middleware.NewRateLimiter(logger, cfg.RateLimit)
 	profileRepository := repository.NewSupabaseProfileRepository(logger, cfg.Supabase)
 	accountRepository := repository.NewSupabaseAccountRepository(logger, cfg.Supabase)
 	activityRepository := repository.NewSupabaseActivityRepository(logger, cfg.Supabase)
@@ -44,13 +46,15 @@ func run(logger *slog.Logger, cfg config.Config) error {
 	idempotencyRepository := repository.NewSupabaseIdempotencyRepository(logger, cfg.Supabase)
 	webhookEventRepository := repository.NewSupabaseWebhookEventRepository(logger, cfg.Supabase)
 	balanceMovementRepository := repository.NewSupabaseBalanceMovementRepository(logger, cfg.Supabase)
+	auditLogRepository := repository.NewSupabaseAuditLogRepository(logger, cfg.Supabase)
 	asyncJobRepository := repository.NewSupabaseAsyncJobRepository(logger, cfg.Supabase)
 	recipientRepository := repository.NewSupabaseRecipientRepository(logger, cfg.Supabase)
 	supportRepository := repository.NewSupabaseSupportRepository(logger, cfg.Supabase)
 	permissionHelper := service.NewPermissionHelper()
 	verificationResolver := service.NewVerificationResolver(logger, profileRepository)
 	idempotencyService := service.NewIdempotencyService(logger, idempotencyRepository)
-	profileService := service.NewProfileService(logger, profileRepository, permissionHelper, verificationResolver)
+	auditService := service.NewAuditService(logger, auditLogRepository)
+	profileService := service.NewProfileService(logger, profileRepository, permissionHelper, verificationResolver, auditService)
 	identityProvider, err := newIdentityProvider(logger, cfg)
 	if err != nil {
 		return err
@@ -61,6 +65,7 @@ func run(logger *slog.Logger, cfg config.Config) error {
 		permissionHelper,
 		verificationResolver,
 		identityProvider,
+		auditService,
 	)
 	accountService := service.NewAccountService(logger, accountRepository, permissionHelper, cfg.Features.EnableSeededAccountFallback)
 	activityService := service.NewActivityService(logger, activityRepository, accountRepository, cfg.Features.EnableSeededAccountFallback)
@@ -74,15 +79,17 @@ func run(logger *slog.Logger, cfg config.Config) error {
 		permissionHelper,
 		activityService,
 		verificationResolver,
+		auditService,
 	)
 	transactionLifecycleService, ok := transactionService.(service.TransactionLifecycleUpdateService)
 	if !ok {
 		return errors.New("transaction lifecycle update service is not available")
 	}
-	webhookService := service.NewWebhookService(
+	webhookService := service.NewWebhookServiceWithAudit(
 		logger,
 		webhookEventRepository,
 		transactionLifecycleService,
+		auditService,
 		service.NewWebhookProviders(cfg.Webhooks)...,
 	)
 	reconciliationService := service.NewReconciliationService(
@@ -91,7 +98,7 @@ func run(logger *slog.Logger, cfg config.Config) error {
 		balanceMovementRepository,
 		webhookEventRepository,
 	)
-	recipientService := service.NewRecipientService(logger, recipientRepository, permissionHelper, verificationResolver)
+	recipientService := service.NewRecipientService(logger, recipientRepository, permissionHelper, verificationResolver, auditService)
 	supportService := service.NewSupportService(
 		logger,
 		supportRepository,
@@ -102,6 +109,7 @@ func run(logger *slog.Logger, cfg config.Config) error {
 		permissionHelper,
 		activityService,
 		verificationResolver,
+		auditService,
 	)
 	router := handler.NewRouter(
 		logger,
@@ -117,6 +125,7 @@ func run(logger *slog.Logger, cfg config.Config) error {
 		recipientService,
 		supportService,
 		cfg.Features.EnableTransactionSimulation,
+		rateLimiter,
 	)
 	transactionJobs := worker.NewTransactionJobs(
 		logger,

@@ -16,6 +16,10 @@ func (s *DefaultTransactionService) CreateFunding(ctx context.Context, user mode
 	}
 
 	if !s.permissions.CanCreateFunding(status) {
+		s.recordAudit(ctx, user.ID, model.AuditActionPermissionDenied, model.AuditEntityPermission, user.ID, model.AuditSourceAPI, map[string]any{
+			"permission":          "transaction.funding.create",
+			"verification_status": status,
+		})
 		return model.FundingTransactionResponse{}, ErrTransactionPermissionDenied
 	}
 
@@ -45,6 +49,13 @@ func (s *DefaultTransactionService) CreateFunding(ctx context.Context, user mode
 	}
 
 	s.syncFundingActivity(ctx, user.ID, savedRecord)
+	s.recordAudit(ctx, user.ID, model.AuditActionTransactionCreated, model.AuditEntityFundingTransaction, savedRecord.ID, model.AuditSourceAPI, map[string]any{
+		"account_id": savedRecord.AccountID,
+		"amount":     savedRecord.Amount,
+		"currency":   savedRecord.Currency,
+		"status":     savedRecord.Status,
+		"reference":  savedRecord.Reference,
+	})
 
 	return model.FundingTransactionResponse{Transaction: buildFundingTransaction(savedRecord)}, nil
 }
@@ -56,6 +67,10 @@ func (s *DefaultTransactionService) CreateTransfer(ctx context.Context, user mod
 	}
 
 	if !s.permissions.CanCreateTransfer(status) {
+		s.recordAudit(ctx, user.ID, model.AuditActionPermissionDenied, model.AuditEntityPermission, user.ID, model.AuditSourceAPI, map[string]any{
+			"permission":          "transaction.transfer.create",
+			"verification_status": status,
+		})
 		return model.TransferTransactionResponse{}, ErrTransactionPermissionDenied
 	}
 
@@ -89,6 +104,16 @@ func (s *DefaultTransactionService) CreateTransfer(ctx context.Context, user mod
 	}
 
 	s.syncTransferActivity(ctx, user.ID, savedRecord)
+	s.recordAudit(ctx, user.ID, model.AuditActionTransactionCreated, model.AuditEntityTransferTransaction, savedRecord.ID, model.AuditSourceAPI, map[string]any{
+		"source_account_id":      savedRecord.SourceAccountID,
+		"destination_account_id": savedRecord.DestinationAccountID,
+		"source_amount":          savedRecord.SourceAmount,
+		"source_currency":        savedRecord.SourceCurrency,
+		"destination_amount":     savedRecord.DestinationAmount,
+		"destination_currency":   savedRecord.DestinationCurrency,
+		"status":                 savedRecord.Status,
+		"reference":              savedRecord.Reference,
+	})
 
 	return model.TransferTransactionResponse{Transaction: buildTransferTransaction(savedRecord)}, nil
 }
@@ -100,6 +125,10 @@ func (s *DefaultTransactionService) CreatePayment(ctx context.Context, user mode
 	}
 
 	if !s.permissions.CanCreatePayment(status) {
+		s.recordAudit(ctx, user.ID, model.AuditActionPermissionDenied, model.AuditEntityPermission, user.ID, model.AuditSourceAPI, map[string]any{
+			"permission":          "transaction.payment.create",
+			"verification_status": status,
+		})
 		return model.PaymentTransactionResponse{}, ErrTransactionPermissionDenied
 	}
 
@@ -140,6 +169,17 @@ func (s *DefaultTransactionService) CreatePayment(ctx context.Context, user mode
 	}
 
 	s.syncPaymentActivity(ctx, user.ID, savedRecord)
+	s.recordAudit(ctx, user.ID, model.AuditActionTransactionCreated, model.AuditEntityPaymentTransaction, savedRecord.ID, model.AuditSourceAPI, map[string]any{
+		"source_account_id": savedRecord.SourceAccountID,
+		"recipient_id":      savedRecord.RecipientID,
+		"payment_type":      savedRecord.PaymentType,
+		"amount":            savedRecord.Amount,
+		"currency":          savedRecord.Currency,
+		"fee":               savedRecord.Fee,
+		"total_amount":      savedRecord.TotalAmount,
+		"status":            savedRecord.Status,
+		"reference":         savedRecord.Reference,
+	})
 
 	return model.PaymentTransactionResponse{Transaction: buildPaymentTransaction(savedRecord)}, nil
 }

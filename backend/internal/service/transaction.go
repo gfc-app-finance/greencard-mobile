@@ -54,6 +54,7 @@ type DefaultTransactionService struct {
 	permissions   PermissionHelper
 	activities    ActivityEventRecorder
 	verification  VerificationResolver
+	audit         AuditRecorder
 }
 
 func NewTransactionService(
@@ -66,7 +67,13 @@ func NewTransactionService(
 	permissions PermissionHelper,
 	activities ActivityEventRecorder,
 	verification VerificationResolver,
+	auditors ...AuditRecorder,
 ) TransactionService {
+	var audit AuditRecorder
+	if len(auditors) > 0 {
+		audit = auditors[0]
+	}
+
 	return &DefaultTransactionService{
 		logger:        logger,
 		fundingRepo:   fundingRepo,
@@ -77,6 +84,7 @@ func NewTransactionService(
 		permissions:   permissions,
 		activities:    activities,
 		verification:  verification,
+		audit:         audit,
 	}
 }
 
@@ -107,5 +115,35 @@ func (s *DefaultTransactionService) syncPaymentActivity(ctx context.Context, use
 
 	if err := s.activities.RecordPaymentEvent(ctx, userID, record); err != nil {
 		s.logger.Warn("failed to sync payment activity", slog.String("user_id", userID), slog.String("transaction_id", record.ID), slog.String("error", err.Error()))
+	}
+}
+
+func (s *DefaultTransactionService) recordAudit(ctx context.Context, actorUserID string, action model.AuditAction, entityType model.AuditEntityType, entityID string, source model.AuditSource, metadata map[string]any) {
+	if s.audit == nil {
+		return
+	}
+
+	if err := s.audit.Record(ctx, model.AuditEvent{
+		ActorUserID: actorUserID,
+		Action:      action,
+		EntityType:  entityType,
+		EntityID:    entityID,
+		Source:      source,
+		Metadata:    metadata,
+	}); err != nil {
+		s.logger.Warn("failed to record transaction audit event", slog.String("user_id", actorUserID), slog.String("action", string(action)), slog.String("entity_type", string(entityType)), slog.String("entity_id", entityID), slog.String("error", err.Error()))
+	}
+}
+
+func auditSourceFromTransactionSource(source model.TransactionStatusSource) model.AuditSource {
+	switch source {
+	case model.TransactionStatusSourceProvider:
+		return model.AuditSourceProvider
+	case model.TransactionStatusSourceSimulation:
+		return model.AuditSourceSimulation
+	case model.TransactionStatusSourceManual:
+		return model.AuditSourceSystem
+	default:
+		return model.AuditSourceSystem
 	}
 }

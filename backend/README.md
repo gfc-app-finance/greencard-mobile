@@ -11,6 +11,8 @@ This backend currently includes:
 - Step 7 recipients and support tickets
 - production hardening foundations for transaction lifecycle safety, balance movements, provider webhook ingestion, async job coordination, and reconciliation checks
 - real provider integration foundation with Smile ID Enhanced KYC as the first KYC provider
+- durable audit/compliance logging for sensitive profile, KYC, money, recipient, support, and provider events
+- configurable IP/user-aware rate limiting for global traffic, sensitive actions, and provider webhooks
 
 It currently sets up:
 
@@ -28,6 +30,8 @@ It currently sets up:
 - reconciliation checks for transaction, balance movement, and webhook-state alignment
 - provider abstraction for identity verification
 - Smile ID Enhanced KYC REST client with signed requests and safe response mapping
+- centralized audit service backed by an `audit_logs` table
+- rate limiting middleware with tighter policies for sensitive write routes
 - verification status modeling
 - permission helper foundation for future feature gating
 - structured logging
@@ -90,12 +94,14 @@ Optional defaults are already provided for:
 - `WORKER_ENABLE_SIMULATION_PROGRESSION`
 - worker polling and timeout values
 - worker job lock, max-attempt, and reconciliation age values
+- rate limit enablement, windows, thresholds, and proxy-header trust
 - HTTP timeout values
 - `SUPABASE_PUBLISHABLE_KEY`
 - `SUPABASE_PROFILE_TABLE`
 - `SUPABASE_ACCOUNT_TABLE`
 - `SUPABASE_ACTIVITY_TABLE`
 - `SUPABASE_BALANCE_MOVEMENT_TABLE`
+- `SUPABASE_AUDIT_LOG_TABLE`
 - `SUPABASE_WEBHOOK_EVENT_TABLE`
 - `SUPABASE_FUNDING_TABLE`
 - `SUPABASE_TRANSFER_TABLE`
@@ -401,6 +407,7 @@ The backend enforces permission checks in the service layer, not in frontend-onl
 - verification state gates money movement, recipient creation, and other restricted flows
 - support tickets remain available even when a user is not fully verified
 - account access and transaction access are scoped to the authenticated user and should fail without revealing cross-user resource existence
+- global traffic is rate-limited by client IP, while authenticated `/v1` traffic is additionally rate-limited by authenticated user ID where available
 
 When adding a new protected endpoint:
 
@@ -408,7 +415,8 @@ When adding a new protected endpoint:
 2. validate the request body at the handler boundary
 3. apply permission and ownership checks in the service layer
 4. keep Supabase queries in repositories only
-5. return sanitized errors and minimal response payloads
+5. record an audit event for sensitive writes, permission denials, or money-affecting state changes
+6. return sanitized errors and minimal response payloads
 
 ## Backend Quality Checks
 
@@ -445,6 +453,7 @@ docker run --rm -p 8080:8080 --env-file .env greencard-api
 - handlers are intentionally thin
 - structured logging is ready from the start
 - response helpers provide a consistent JSON error format
+- rate limiting returns a consistent `429 rate_limit_exceeded` JSON response with `Retry-After`
 - protected routes validate Supabase access tokens before reaching handlers
 - request context carries a sanitized authenticated user model for downstream handlers
 - JWT verification prefers JWKS and falls back to Supabase Auth token introspection for legacy/shared-secret projects
@@ -465,6 +474,8 @@ docker run --rm -p 8080:8080 --env-file .env greencard-api
 - a checked-in Supabase migration is available at `supabase/migrations/20260419_create_activities.sql`
 - the balance movement repository expects a Supabase table named `account_balance_movements` by default
 - a checked-in Supabase migration is available at `supabase/migrations/20260420_create_balance_movements.sql`
+- the audit log repository expects a Supabase table named `audit_logs` by default
+- a checked-in Supabase migration is available at `supabase/migrations/20260422_create_audit_logs.sql`
 - the webhook event repository expects a Supabase table named `provider_webhook_events` by default
 - the async job repository expects a Supabase table named `async_job_runs` by default
 - the recipient repository expects a Supabase table named `recipients` by default
@@ -478,6 +489,7 @@ docker run --rm -p 8080:8080 --env-file .env greencard-api
 - expected idempotency key columns are `id`, `user_id`, `operation`, `idempotency_key`, `request_hash`, `response_status`, `response_body`, `created_at`, and `updated_at`
 - expected activity columns are `id`, `user_id`, `type`, `title`, `subtitle`, `amount`, `currency`, `status`, `linked_entity_type`, `linked_entity_id`, `created_at`, and `updated_at`
 - expected balance movement columns are `id`, `user_id`, `account_id`, `linked_entity_type`, `linked_entity_id`, `movement_type`, `direction`, `amount`, `currency`, and `created_at`
+- expected audit log columns are `id`, `actor_user_id`, `action`, `entity_type`, `entity_id`, `source`, `metadata_summary`, `request_id`, `ip_summary`, `provider`, `correlation_id`, and `created_at`
 - expected webhook event columns are `id`, `provider`, `event_id`, `event_type`, `linked_entity_type`, `linked_entity_id`, `linked_reference`, `processing_status`, `status_message`, `received_at`, `processed_at`, and `updated_at`
 - expected async job columns are `id`, `job_key`, `job_type`, `entity_type`, `entity_id`, `status`, `attempt_count`, `max_attempts`, `last_error`, `last_processed_at`, `locked_until`, `created_at`, and `updated_at`
 - expected recipient columns are `id`, `user_id`, `type`, `full_name`, `bank_name`, `account_number`, `iban`, `routing_number`, `sort_code`, `swift_code`, `country`, `currency`, `nickname`, `created_at`, and `updated_at`
@@ -494,6 +506,10 @@ docker run --rm -p 8080:8080 --env-file .env greencard-api
 - mocked transaction progression helpers are only exposed through the explicit `/simulate/advance` routes when `ENABLE_TRANSACTION_SIMULATION=true`, and GET/list endpoints do not mutate transaction status
 - transaction status updates also synchronize the matching activity item so feed status stays aligned with the source transaction state
 - transaction completion now applies account balance effects through atomic database settlement functions and records matching balance movements for auditability
+- sensitive writes and money lifecycle events also write durable compliance audit records through the centralized audit service
+- audit metadata is summarized and redacted before persistence; raw tokens, secrets, account numbers, ID numbers, BVN/NIN values, and full provider payloads must not be stored in `audit_logs`
+- rate limiting defaults are practical MVP limits: global `300/min/IP`, authenticated `900/min/user`, sensitive writes `20/min/user`, and webhooks `120/min/IP`
+- `RATE_LIMIT_TRUST_PROXY_HEADERS=false` by default; enable it only when the API is behind a trusted proxy that controls `X-Forwarded-For` or `X-Real-IP`
 - repeated completion events are idempotent from the balance perspective because the settlement layer checks for existing movement effects before applying balance changes again
 - `last_status_change_at` tracks the last real lifecycle transition timestamp, while `updated_at` can also move when safe metadata refreshes happen on already-settled transactions
 - provider webhook deliveries are tracked in `provider_webhook_events`, and already-processed `(provider, event_id)` deliveries are ignored safely
