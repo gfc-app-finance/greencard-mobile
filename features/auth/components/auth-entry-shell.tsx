@@ -23,7 +23,8 @@ export function AuthEntryShell({
         contentContainerStyle,
       ]}
       keyboardAware={keyboardAware}
-      scrollable={scrollable}>
+      scrollable={scrollable}
+    >
       {children}
     </SafeScreenContainer>
   );

@@ -1,4 +1,4 @@
-import { Image } from 'expo-image';
+import LottieView from 'lottie-react-native';
 import { Animated, StyleSheet, Text, View } from 'react-native';
 
 import { Colors } from '@/constants/colors';
@@ -26,25 +26,13 @@ export function OnboardingSlideCard({
 
   const visualScale = scrollX.interpolate({
     inputRange,
-    outputRange: [0.94, 1, 0.94],
+    outputRange: [0.92, 1, 0.92],
     extrapolate: 'clamp',
   });
 
-  const visualTranslateY = scrollX.interpolate({
+  const opacity = scrollX.interpolate({
     inputRange,
-    outputRange: [20, 0, 20],
-    extrapolate: 'clamp',
-  });
-
-  const copyOpacity = scrollX.interpolate({
-    inputRange,
-    outputRange: [0.45, 1, 0.45],
-    extrapolate: 'clamp',
-  });
-
-  const copyTranslateY = scrollX.interpolate({
-    inputRange,
-    outputRange: [16, 0, 16],
+    outputRange: [0.4, 1, 0.4],
     extrapolate: 'clamp',
   });
 
@@ -54,35 +42,40 @@ export function OnboardingSlideCard({
         style={[
           styles.visualWrap,
           {
-            transform: [{ scale: visualScale }, { translateY: visualTranslateY }],
+            transform: [{ scale: visualScale }],
+            opacity: opacity,
           },
-        ]}>
-        <View style={styles.visualFrame}>
-          <View style={styles.visualMeta}>
-            <Text style={styles.visualEyebrow}>{slide.eyebrow}</Text>
-            <Text style={styles.visualCounter}>{`0${index + 1}`}</Text>
-          </View>
+        ]}
+      >
+        <View style={styles.shadowWrapper}>
+          <View style={styles.visualFrame}>
+            <View style={styles.visualMeta}>
+              <Text style={styles.visualEyebrow}>{slide.eyebrow}</Text>
+              <Text style={styles.visualCounter}>{`0${index + 1}`}</Text>
+            </View>
 
-          <Image contentFit="cover" source={slide.image} style={styles.image} transition={200} />
+            <View style={styles.animationContainer}>
+              <LottieView
+                source={slide.animation}
+                autoPlay
+                loop
+                style={{ width: '100%', height: '100%' }}
+                speed={0.7}
+              />
+            </View>
 
-          <View style={styles.visualFooter}>
-            <Text style={styles.visualFooterLabel}>{slide.accentLabel}</Text>
-            <Text style={styles.visualFooterValue}>{slide.accentValue}</Text>
+            <View style={styles.visualFooter}>
+              <Text style={styles.visualFooterLabel}>{slide.accentLabel}</Text>
+              <Text style={styles.visualFooterValue}>{slide.accentValue}</Text>
+            </View>
           </View>
         </View>
       </Animated.View>
 
-      <Animated.View
-        style={[
-          styles.copyWrap,
-          {
-            opacity: copyOpacity,
-            transform: [{ translateY: copyTranslateY }],
-          },
-        ]}>
+      <View style={styles.copyWrap}>
         <Text style={styles.title}>{slide.title}</Text>
         <Text style={styles.subtitle}>{slide.subtitle}</Text>
-      </Animated.View>
+      </View>
     </View>
   );
 }
@@ -92,82 +85,84 @@ const styles = StyleSheet.create({
     gap: Spacing.xl,
   },
   visualWrap: {
-    height: 420,
+    height: 380,
     justifyContent: 'center',
+    padding: 10,
+  },
+  shadowWrapper: {
+    flex: 1,
+    backgroundColor: 'transparent',
+    shadowColor: '#107569',
+    shadowOffset: { width: 0, height: 15 },
+    shadowOpacity: 0.35,
+    shadowRadius: 22,
+    elevation: 15,
   },
   visualFrame: {
-    backgroundColor: Colors.surface,
-    borderColor: Colors.border,
-    borderRadius: 36,
-    borderWidth: 1,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 42,
     flex: 1,
     overflow: 'hidden',
-    padding: Spacing.md,
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.06,
-    shadowRadius: 18,
+    padding: Spacing.lg,
   },
   visualMeta: {
-    alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: Spacing.md,
+    marginBottom: Spacing.sm,
   },
   visualEyebrow: {
     color: Colors.primary,
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 1.3,
+    fontSize: 10,
+    fontWeight: '600',
+    letterSpacing: 4,
+    textTransform: 'uppercase',
   },
   visualCounter: {
     color: Colors.textSubtle,
-    fontSize: 13,
-    fontWeight: '700',
-    letterSpacing: 0.8,
+    fontSize: 12,
+    fontWeight: '500',
+    opacity: 0.4,
   },
-  image: {
-    borderRadius: 28,
+  animationContainer: {
     flex: 1,
-    minHeight: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   visualFooter: {
-    backgroundColor: Colors.surfaceSecondary,
-    borderColor: Colors.border,
-    borderRadius: 24,
-    borderWidth: 1,
-    gap: 4,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 22,
     marginTop: Spacing.md,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
+    paddingVertical: 12,
+    alignItems: 'center',
   },
   visualFooterLabel: {
     color: Colors.textSubtle,
-    fontSize: 11,
+    fontSize: 9,
     fontWeight: '700',
-    letterSpacing: 1,
+    letterSpacing: 1.5,
     textTransform: 'uppercase',
+    marginBottom: 2,
   },
   visualFooterValue: {
     color: Colors.text,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
-    lineHeight: 20,
   },
   copyWrap: {
-    gap: Spacing.md,
-    paddingHorizontal: 2,
+    gap: 8,
+    paddingHorizontal: 12,
   },
   title: {
     color: Colors.text,
-    fontSize: 34,
-    fontWeight: '700',
+    fontSize: 30,
+    fontWeight: '600',
     letterSpacing: -0.8,
-    lineHeight: 40,
+    lineHeight: 36,
   },
   subtitle: {
     color: Colors.textMuted,
     fontSize: 16,
-    lineHeight: 25,
+    lineHeight: 26,
+    fontWeight: '400',
   },
 });

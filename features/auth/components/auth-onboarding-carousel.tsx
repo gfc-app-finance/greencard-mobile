@@ -1,3 +1,4 @@
+import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import {
   Animated,
@@ -21,8 +22,9 @@ import { onboardingSlides } from '@/features/auth/constants/onboarding';
 import { useOnboarding } from '@/hooks/use-onboarding';
 
 export function AuthOnboardingCarousel() {
+  const router = useRouter();
   const { width } = useWindowDimensions();
-  const { finishOnboardingFlow, markOnboardingSeen } = useOnboarding();
+  const { markOnboardingSeen } = useOnboarding();
   const scrollViewRef = useRef<ScrollView | null>(null);
   const scrollX = useRef(new Animated.Value(0)).current;
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -54,15 +56,10 @@ export function AuthOnboardingCarousel() {
 
   function handleNext() {
     const nextIndex = currentIndex + 1;
-
-    if (nextIndex > lastIndex) {
-      return;
-    }
-
+    if (nextIndex > lastIndex) return;
     if (nextIndex === lastIndex) {
       void markOnboardingSeen();
     }
-
     scrollToIndex(nextIndex);
   }
 
@@ -72,19 +69,18 @@ export function AuthOnboardingCarousel() {
   }
 
   async function handleAuthRoute(href: '/signup' | '/login') {
-    await finishOnboardingFlow(href);
+    router.push(href as any);
   }
 
   return (
     <AuthEntryShell contentContainerStyle={styles.shellContent} scrollable={false}>
       <View style={styles.header}>
-        <View style={styles.brandChip}>
-          <Text style={styles.brandText}>GCF</Text>
-          <Text style={styles.brandSubtext}>Global money, made clearer</Text>
-        </View>
-
+        <View />
         {!isFinalSlide ? (
-          <Pressable onPress={handleSkip} style={({ pressed }) => [styles.skipButton, pressed && styles.pressed]}>
+          <Pressable
+            onPress={handleSkip}
+            style={({ pressed }) => [styles.skipLink, pressed && styles.pressed]}
+          >
             <Text style={styles.skipLabel}>Skip</Text>
           </Pressable>
         ) : (
@@ -100,15 +96,15 @@ export function AuthOnboardingCarousel() {
           horizontal
           key={slideWidth}
           onMomentumScrollEnd={handleMomentumScrollEnd}
-          onScroll={Animated.event(
-            [{ nativeEvent: { contentOffset: { x: scrollX } } }],
-            { useNativeDriver: false }
-          )}
+          onScroll={Animated.event([{ nativeEvent: { contentOffset: { x: scrollX } } }], {
+            useNativeDriver: false,
+          })}
           overScrollMode="never"
           pagingEnabled
           scrollEventThrottle={16}
           showsHorizontalScrollIndicator={false}
-          snapToInterval={slideWidth}>
+          snapToInterval={slideWidth}
+        >
           {onboardingSlides.map((slide, index) => (
             <OnboardingSlideCard
               key={slide.id}
@@ -136,11 +132,14 @@ export function AuthOnboardingCarousel() {
 
         {isFinalSlide ? (
           <View style={styles.ctaGroup}>
-            <AppButton title="Create account" onPress={() => void handleAuthRoute('/signup')} />
+            <AppButton
+              title="Create account"
+              onPress={() => handleAuthRoute('/signup')}
+            />
             <AppButton
               title="Log in"
               variant="secondary"
-              onPress={() => void handleAuthRoute('/login')}
+              onPress={() => handleAuthRoute('/login')}
             />
           </View>
         ) : (
@@ -156,51 +155,29 @@ const styles = StyleSheet.create({
     gap: Spacing.lg,
     justifyContent: 'space-between',
     paddingBottom: Spacing.xl,
-    paddingTop: Spacing.sm,
+    paddingTop: Spacing.md,
   },
   header: {
-    alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'space-between',
-  },
-  brandChip: {
-    backgroundColor: Colors.surface,
-    borderColor: Colors.border,
-    borderRadius: Radius.full,
-    borderWidth: 1,
-    gap: 2,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 10,
-  },
-  brandText: {
-    color: Colors.text,
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 1.4,
-  },
-  brandSubtext: {
-    color: Colors.textSubtle,
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  skipButton: {
     alignItems: 'center',
-    backgroundColor: Colors.surface,
-    borderColor: Colors.border,
-    borderRadius: Radius.full,
-    borderWidth: 1,
-    justifyContent: 'center',
-    minHeight: 40,
-    minWidth: 74,
     paddingHorizontal: Spacing.md,
+    height: 44,
+  },
+  skipLink: {
+    backgroundColor: 'rgba(148, 163, 184, 0.1)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: Radius.full,
   },
   skipLabel: {
     color: Colors.textMuted,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
+    letterSpacing: 0.5,
   },
   skipSpacer: {
-    width: 74,
+    width: 44,
   },
   carouselWrap: {
     flex: 1,
@@ -211,14 +188,15 @@ const styles = StyleSheet.create({
   },
   helperText: {
     color: Colors.textSubtle,
-    fontSize: 14,
-    lineHeight: 21,
+    fontSize: 12,
+    lineHeight: 18,
     textAlign: 'center',
+    opacity: 0.7,
   },
   ctaGroup: {
     gap: Spacing.sm,
   },
   pressed: {
-    opacity: 0.9,
+    opacity: 0.7,
   },
 });
