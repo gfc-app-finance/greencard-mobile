@@ -64,12 +64,16 @@ backend/
   internal/service        thin service layer
   internal/worker         background jobs and progression engine
   .env.example            local backend env template
+  .env.staging.example    staging backend env template
   Dockerfile              container build
   Makefile                common dev commands
+  STAGING.md              staging deployment and verification runbook
   go.mod                  Go module definition
 ```
 
 ## Environment
+
+For the full local/staging/production environment matrix, see `../docs/DEPLOYMENT_ENVIRONMENTS.md`.
 
 Copy the template and fill in the required values:
 
@@ -81,6 +85,14 @@ Required:
 
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`
+
+Staging and production both reject unsafe non-production shortcuts:
+
+- `ENABLE_SEEDED_ACCOUNT_FALLBACK=false`
+- `ENABLE_TRANSACTION_SIMULATION=false`
+- `WORKER_ENABLE_SIMULATION_PROGRESSION=false`
+
+Staging uses `APP_ENV=staging` and should point to a dedicated staging Supabase project. See `STAGING.md` for the full staging deployment checklist.
 
 Production also requires:
 
@@ -409,6 +421,7 @@ make vet
 make check
 make tidy
 make docker-build
+make staging-config-check
 ```
 
 Validate runtime configuration without starting the server:
@@ -470,7 +483,7 @@ The container runs as a non-root user and includes a Docker healthcheck against 
 
 ## Operations
 
-See `OPERATIONS.md` for deployment, health check, logging, config smoke test, and troubleshooting guidance.
+See `OPERATIONS.md` for deployment, health check, logging, config smoke test, and troubleshooting guidance. See `STAGING.md` for the staging-specific deployment and frontend/backend verification flow. See `../docs/SUPABASE_MIGRATION_CHECKLIST.md` before applying staging database migrations.
 
 ## Notes
 

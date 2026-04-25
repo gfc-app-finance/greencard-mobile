@@ -393,12 +393,16 @@ func validate(cfg Config) error {
 		return fmt.Errorf("invalid APP_ENV %q", cfg.Env)
 	}
 
-	if cfg.Env == "production" && cfg.Features.EnableTransactionSimulation {
-		return errors.New("ENABLE_TRANSACTION_SIMULATION cannot be enabled in production")
+	if isDeployedEnvironment(cfg.Env) && cfg.Features.EnableSeededAccountFallback {
+		return errors.New("ENABLE_SEEDED_ACCOUNT_FALLBACK cannot be enabled in staging or production")
 	}
 
-	if cfg.Env == "production" && cfg.Worker.EnableSimulationProgression {
-		return errors.New("WORKER_ENABLE_SIMULATION_PROGRESSION cannot be enabled in production")
+	if isDeployedEnvironment(cfg.Env) && cfg.Features.EnableTransactionSimulation {
+		return errors.New("ENABLE_TRANSACTION_SIMULATION cannot be enabled in staging or production")
+	}
+
+	if isDeployedEnvironment(cfg.Env) && cfg.Worker.EnableSimulationProgression {
+		return errors.New("WORKER_ENABLE_SIMULATION_PROGRESSION cannot be enabled in staging or production")
 	}
 
 	if cfg.Env == "production" && strings.EqualFold(cfg.Version, "dev") {
@@ -608,7 +612,7 @@ func parsePositiveIntEnv(key string, defaultValue int) (int, error) {
 
 func cfgDefaultTransactionSimulation(env string) bool {
 	switch strings.TrimSpace(strings.ToLower(env)) {
-	case "production":
+	case "staging", "production":
 		return false
 	default:
 		return true
@@ -661,6 +665,15 @@ func isSafeIdentifier(value string) bool {
 	}
 
 	return true
+}
+
+func isDeployedEnvironment(env string) bool {
+	switch strings.TrimSpace(strings.ToLower(env)) {
+	case "staging", "production":
+		return true
+	default:
+		return false
+	}
 }
 
 func loadDotEnv(filePath string) error {

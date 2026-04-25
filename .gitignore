@@ -37,6 +37,11 @@ dist-ci/
 
 # local env files
 .env
+.env.staging
+.env.production
+backend/.env
+backend/.env.staging
+backend/.env.production
 .env*.local
 .env.*.local
 
