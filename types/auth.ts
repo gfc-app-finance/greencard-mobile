@@ -1,5 +1,7 @@
 import type { Session, User } from '@supabase/supabase-js';
 
+export type AuthVerificationStep = 'email' | 'phone';
+
 export type LoginFormValues = {
   email: string;
   password: string;
@@ -12,6 +14,12 @@ export type SignupFormValues = {
   password: string;
   confirmPassword: string;
   referralCode?: string;
+};
+
+export type AuthVerificationTarget = {
+  email: string;
+  phone: string | null;
+  nextStep: AuthVerificationStep;
 };
 
 export type SessionContextValue = {
