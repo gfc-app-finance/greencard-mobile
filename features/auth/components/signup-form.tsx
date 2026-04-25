@@ -1,4 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useRouter } from 'expo-router';
 import { Controller, useForm } from 'react-hook-form';
 import { StyleSheet, View } from 'react-native';
 
@@ -13,8 +14,9 @@ import { toErrorMessage } from '@/lib/errors';
 import type { SignupFormValues } from '@/types/auth';
 
 export function SignupForm() {
+  const router = useRouter();
   const signupMutation = useSignupMutation();
-  const { clearPostOnboardingRoute } = useOnboarding();
+  const { clearPostOnboardingRoute, finishOnboardingFlow } = useOnboarding();
   const form = useForm<SignupFormValues>({
     resolver: zodResolver(signupSchema),
     defaultValues: {
@@ -32,7 +34,7 @@ export function SignupForm() {
       const result = await signupMutation.mutateAsync(values);
       clearPostOnboardingRoute();
 
-      if (result.needsEmailConfirmation) {
+      if (result.verificationTarget) {
         form.reset({
           fullName: values.fullName,
           email: values.email,
@@ -41,6 +43,21 @@ export function SignupForm() {
           confirmPassword: '',
           referralCode: values.referralCode || '',
         });
+
+        router.replace({
+          pathname: '/auth/verify',
+          params: {
+            email: result.verificationTarget.email,
+            phone: result.verificationTarget.phone ?? '',
+            step: result.verificationTarget.nextStep,
+          },
+        } as never);
+        return;
+      }
+
+      if (result.session) {
+        await finishOnboardingFlow();
+        router.replace('/home');
       }
     } catch {
       return;
@@ -51,7 +68,10 @@ export function SignupForm() {
     <View style={styles.form}>
       {signupMutation.error ? (
         <NoticeBanner
-          message={toErrorMessage(signupMutation.error, 'Unable to create your account right now.')}
+          message={toErrorMessage(
+            signupMutation.error,
+            'Unable to create your account right now.',
+          )}
           tone="error"
         />
       ) : null}
@@ -106,6 +126,7 @@ export function SignupForm() {
           <AppInput
             autoCapitalize="none"
             autoCorrect={false}
+            helperText="Use international format, for example +2348012345678."
             keyboardType="phone-pad"
             label="Phone number"
             onBlur={field.onBlur}
