@@ -1,0 +1,65 @@
+name: Backend Staging
+
+on:
+  workflow_dispatch:
+
+jobs:
+  staging-validation:
+    runs-on: ubuntu-latest
+    environment: staging
+    permissions:
+      contents: read
+
+    defaults:
+      run:
+        working-directory: backend
+
+    env:
+      APP_ENV: staging
+      APP_VERSION: staging-${{ github.sha }}
+      LOG_LEVEL: info
+      ENABLE_SEEDED_ACCOUNT_FALLBACK: 'false'
+      ENABLE_TRANSACTION_SIMULATION: 'false'
+      WORKER_ENABLE_SIMULATION_PROGRESSION: 'false'
+      RATE_LIMIT_ENABLED: 'true'
+      KYC_PROVIDER: disabled
+      SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
+      WEBHOOK_SANDBOXPAY_SECRET: ${{ secrets.STAGING_WEBHOOK_SANDBOXPAY_SECRET }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+
+      - name: Formatting check
+        shell: bash
+        run: |
+          files="$(gofmt -l ./cmd ./internal)"
+          if [ -n "$files" ]; then
+            echo "The following files need gofmt:"
+            echo "$files"
+            exit 1
+          fi
+
+      - name: Test
+        run: go test ./...
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Build
+        run: go build ./cmd/api
+
+      - name: Staging config validation
+        run: go run ./cmd/api check-config
+
+      - name: Docker image build
+        run: docker build --build-arg APP_VERSION=${APP_VERSION} --build-arg APP_COMMIT=${{ github.sha }} --build-arg BUILD_DATE=${{ github.run_id }} -t greencard-api-staging .
+
+      - name: Docker staging config smoke test
+        run: docker run --rm --env APP_ENV --env APP_VERSION --env LOG_LEVEL --env ENABLE_SEEDED_ACCOUNT_FALLBACK --env ENABLE_TRANSACTION_SIMULATION --env WORKER_ENABLE_SIMULATION_PROGRESSION --env RATE_LIMIT_ENABLED --env KYC_PROVIDER --env SUPABASE_URL --env SUPABASE_SERVICE_ROLE_KEY --env WEBHOOK_SANDBOXPAY_SECRET greencard-api-staging check-config

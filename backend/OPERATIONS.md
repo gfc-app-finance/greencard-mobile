@@ -10,6 +10,12 @@ This runbook covers the practical steps needed to build, deploy, observe, and tr
 - `X-Request-ID` and `X-Correlation-ID` are mirrored in responses and included in request logs.
 - The process fails fast when required config is missing or unsafe production flags are enabled.
 
+## Environment Runbooks
+
+- Use `../docs/DEPLOYMENT_ENVIRONMENTS.md` for the complete local, staging, and production env var reference.
+- Use `STAGING.md` for staging deployment, staging Supabase setup, and frontend/backend verification.
+- Use this runbook for shared operational behavior and production deployment expectations.
+
 ## Required Production Environment
 
 Set these in the deployment secret manager, not in Git:
@@ -27,6 +33,16 @@ Recommended production values:
 - `WORKER_ENABLE_SIMULATION_PROGRESSION=false`
 - `WORKER_ENABLED=true` when background transaction checks should run in this process
 - `RATE_LIMIT_TRUST_PROXY_HEADERS=true` only behind a trusted proxy or load balancer that overwrites forwarded headers
+
+Staging should use the same safety posture for money and lifecycle behavior:
+
+- `APP_ENV=staging`
+- dedicated staging Supabase project and service-role key
+- `ENABLE_TRANSACTION_SIMULATION=false`
+- `WORKER_ENABLE_SIMULATION_PROGRESSION=false`
+- `ENABLE_SEEDED_ACCOUNT_FALLBACK=false`
+
+Use `backend/.env.staging.example` as the staging template.
 
 If Smile ID is enabled in production:
 
@@ -81,11 +97,19 @@ docker run --rm \
 
 This validates config and exits without starting the HTTP server.
 
+For staging specifically:
+
+```bash
+docker run --rm --env-file .env.staging greencard-api:staging check-config
+```
+
 ## Health Checks
 
 - `GET /live`: liveness check for process health.
 - `GET /health`: legacy liveness alias.
 - `GET /ready`: readiness check for deploy/load-balancer gating.
+
+Staging deployments should verify `/live` and `/ready` before connecting the frontend.
 
 The Dockerfile uses `/ready` for container health checks.
 

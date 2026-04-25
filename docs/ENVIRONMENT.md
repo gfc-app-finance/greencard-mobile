@@ -1,33 +1,32 @@
 # Environment and Secrets
 
-## Required Variables
+Use `DEPLOYMENT_ENVIRONMENTS.md` as the full source of truth for local, staging, and production environment setup.
 
-Copy `.env.example` to `.env` and provide:
+## Quick Setup
 
-- `EXPO_PUBLIC_SUPABASE_URL`
-- `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
-
-Optional legacy fallback:
-
-- `EXPO_PUBLIC_SUPABASE_ANON_KEY`
-
-## Rules
-
-- `.env` must never be committed
-- use only public Expo-prefixed variables for values that are safe to expose to the client
-- anything truly secret belongs in server-side infrastructure, not the mobile app bundle
-
-## Setup
+Frontend local:
 
 ```bash
 cp .env.example .env
 ```
 
-Then update the values using your local development credentials.
+Backend local:
 
-## Security Guidance
+```bash
+cp backend/.env.example backend/.env
+```
 
-- rotate exposed keys if they are ever committed by mistake
-- never put service-role or admin credentials in Expo public env vars
-- prefer separate environments for local, staging, and production
-- document any new env var in `.env.example` and this file in the same PR
+Staging templates:
+
+- root `.env.staging.example` for public frontend staging values
+- `backend/.env.staging.example` for backend staging config
+- `backend/STAGING.md` for staging deployment and verification
+
+## Core Rules
+
+- `.env`, `.env.staging`, and `.env.production` files must never be committed.
+- `EXPO_PUBLIC_*` values are public and can be included in the mobile/web bundle.
+- `SUPABASE_SERVICE_ROLE_KEY`, provider API keys, webhook secrets, and private keys are backend-only secrets.
+- Staging and production must use separate Supabase projects and separate provider credentials.
+- Staging and production must keep seeded fallbacks and transaction simulation disabled.
+- Any new env var must be added to the relevant example file and documented in `DEPLOYMENT_ENVIRONMENTS.md`.

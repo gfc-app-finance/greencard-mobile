@@ -5,7 +5,7 @@ BUILD_DATE ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo unknown)
 BINARY_DIR := bin
 BINARY := $(BINARY_DIR)/api
 
-.PHONY: run build test fmt fmt-check vet tidy config-check check clean docker-build docker-smoke
+.PHONY: run build test fmt fmt-check vet tidy config-check staging-config-check check clean docker-build docker-smoke staging-docker-smoke
 
 run:
 	go run ./cmd/api
@@ -32,6 +32,9 @@ tidy:
 config-check:
 	APP_ENV=staging APP_VERSION=$(APP_VERSION) SUPABASE_URL=https://placeholder.supabase.co SUPABASE_SERVICE_ROLE_KEY=placeholder-service-role go run ./cmd/api check-config
 
+staging-config-check:
+	APP_ENV=staging APP_VERSION=$(APP_VERSION) ENABLE_SEEDED_ACCOUNT_FALLBACK=false ENABLE_TRANSACTION_SIMULATION=false WORKER_ENABLE_SIMULATION_PROGRESSION=false go run ./cmd/api check-config
+
 check: fmt-check vet test build config-check
 
 clean:
@@ -42,3 +45,6 @@ docker-build:
 
 docker-smoke: docker-build
 	docker run --rm -e SUPABASE_URL=https://placeholder.supabase.co -e SUPABASE_SERVICE_ROLE_KEY=placeholder-service-role $(APP_NAME) check-config
+
+staging-docker-smoke: docker-build
+	docker run --rm --env-file .env.staging $(APP_NAME) check-config

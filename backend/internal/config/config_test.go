@@ -28,10 +28,36 @@ func TestLoadRejectsProductionWithRateLimitDisabled(t *testing.T) {
 	}
 }
 
+func TestLoadRejectsStagingWithSimulationEnabled(t *testing.T) {
+	setBaseConfigEnv(t)
+	t.Setenv("APP_ENV", "staging")
+	t.Setenv("APP_VERSION", "staging-test")
+	t.Setenv("ENABLE_TRANSACTION_SIMULATION", "true")
+
+	_, err := Load()
+	if err == nil || !strings.Contains(err.Error(), "ENABLE_TRANSACTION_SIMULATION") {
+		t.Fatalf("expected staging simulation validation error, got %v", err)
+	}
+}
+
+func TestLoadRejectsStagingWithSeededFallbackEnabled(t *testing.T) {
+	setBaseConfigEnv(t)
+	t.Setenv("APP_ENV", "staging")
+	t.Setenv("APP_VERSION", "staging-test")
+	t.Setenv("ENABLE_SEEDED_ACCOUNT_FALLBACK", "true")
+
+	_, err := Load()
+	if err == nil || !strings.Contains(err.Error(), "ENABLE_SEEDED_ACCOUNT_FALLBACK") {
+		t.Fatalf("expected staging seeded fallback validation error, got %v", err)
+	}
+}
+
 func TestLoadAcceptsStagingConfigForSmokeChecks(t *testing.T) {
 	setBaseConfigEnv(t)
 	t.Setenv("APP_ENV", "staging")
 	t.Setenv("APP_VERSION", "ci")
+	t.Setenv("ENABLE_TRANSACTION_SIMULATION", "")
+	t.Setenv("WORKER_ENABLE_SIMULATION_PROGRESSION", "")
 
 	cfg, err := Load()
 	if err != nil {
@@ -39,6 +65,12 @@ func TestLoadAcceptsStagingConfigForSmokeChecks(t *testing.T) {
 	}
 	if cfg.RateLimit.GlobalRequests <= 0 {
 		t.Fatalf("expected rate limit defaults to be populated")
+	}
+	if cfg.Features.EnableTransactionSimulation {
+		t.Fatalf("expected staging transaction simulation default to be disabled")
+	}
+	if cfg.Worker.EnableSimulationProgression {
+		t.Fatalf("expected staging worker simulation default to be disabled")
 	}
 }
 

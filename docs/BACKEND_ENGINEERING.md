@@ -82,10 +82,12 @@ For transaction writes:
 - `/live` and `/health` are liveness endpoints for process health
 - `/ready` is the readiness endpoint for load balancers and container health checks
 - use `go run ./cmd/api check-config` or the image `check-config` command before deploying a new environment
+- staging deployments should follow `backend/STAGING.md` and use a dedicated staging Supabase project
+- deployed environments must keep seeded account fallback, transaction simulation, and worker simulation disabled
 - production deployments must set `APP_VERSION` to a release version or commit SHA
-- production deployments must keep transaction simulation and worker simulation disabled
 - Docker images should be built through the backend Dockerfile or `make docker-build`, which runs a multi-stage build and drops runtime privileges to a non-root user
 - keep deployment runbooks in `backend/OPERATIONS.md`
+- apply Supabase schema changes to staging using `docs/SUPABASE_MIGRATION_CHECKLIST.md`
 
 ## Audit and Compliance Logging
 
