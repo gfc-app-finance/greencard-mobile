@@ -1,18 +1,24 @@
-import type { Session, User } from '@supabase/supabase-js';
+import type { EmailOtpType, MobileOtpType, Session, User } from '@supabase/supabase-js';
 
 import {
   getEmailConfirmationRedirectUrl,
   parseAuthConfirmationUrl,
 } from '@/lib/auth-deep-link';
 import { assertSupabaseEnv } from '@/lib/env';
+import { normalizePhoneNumber } from '@/lib/phone';
 import { supabase } from '@/lib/supabase';
-import type { LoginFormValues, SignupFormValues } from '@/types/auth';
+import type {
+  AuthVerificationTarget,
+  LoginFormValues,
+  SignupFormValues,
+} from '@/types/auth';
 import type { VerificationProfile } from '@/types/verification';
 
 export type AuthResult = {
   session: Session | null;
   user: User | null;
   needsEmailConfirmation: boolean;
+  verificationTarget?: AuthVerificationTarget;
   message?: string;
 };
 
@@ -43,16 +49,18 @@ export async function signIn(values: LoginFormValues): Promise<AuthResult> {
 
 export async function signUp(values: SignupFormValues): Promise<AuthResult> {
   assertSupabaseEnv();
+  const normalizedEmail = values.email.trim().toLowerCase();
+  const normalizedPhone = normalizePhoneNumber(values.phoneNumber);
   const referralCode = values.referralCode?.trim();
 
   const { data, error } = await supabase.auth.signUp({
-    email: values.email.trim().toLowerCase(),
+    email: normalizedEmail,
     password: values.password,
     options: {
       emailRedirectTo: getEmailConfirmationRedirectUrl(),
       data: {
         full_name: values.fullName.trim(),
-        phone_number: values.phoneNumber.trim(),
+        phone_number: normalizedPhone,
         referral_code: referralCode || null,
       },
     },
@@ -63,15 +71,116 @@ export async function signUp(values: SignupFormValues): Promise<AuthResult> {
   }
 
   const needsEmailConfirmation = !data.session;
+  const verificationTarget: AuthVerificationTarget | undefined =
+    needsEmailConfirmation || normalizedPhone
+      ? {
+          email: normalizedEmail,
+          phone: normalizedPhone || null,
+          nextStep: needsEmailConfirmation ? 'email' : 'phone',
+        }
+      : undefined;
 
   return {
     session: data.session,
     user: data.user,
     needsEmailConfirmation,
+    verificationTarget,
     message: needsEmailConfirmation
-      ? 'Check your email to confirm your account. The confirmation link will bring you back into the app.'
-      : 'Your Greencard account is ready. Complete profile and identity verification inside the app to unlock full access.',
+      ? 'Enter the email code we sent to finish setting up your account inside the app.'
+      : normalizedPhone
+        ? 'Confirm the SMS code we sent to secure your phone number.'
+        : 'Your Greencard account is ready. Complete profile and identity verification inside the app to unlock full access.',
   };
+}
+
+export async function verifyEmailOtp(
+  email: string,
+  token: string,
+  type: EmailOtpType = 'signup',
+) {
+  assertSupabaseEnv();
+
+  const { data, error } = await supabase.auth.verifyOtp({
+    email: email.trim().toLowerCase(),
+    token: token.trim(),
+    type,
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
+export async function resendSignupEmailOtp(email: string) {
+  assertSupabaseEnv();
+
+  const { error } = await supabase.auth.resend({
+    type: 'signup',
+    email: email.trim().toLowerCase(),
+    options: {
+      emailRedirectTo: getEmailConfirmationRedirectUrl(),
+    },
+  });
+
+  if (error) {
+    throw error;
+  }
+}
+
+export async function beginPhoneVerification(phoneNumber: string) {
+  assertSupabaseEnv();
+
+  const normalizedPhone = normalizePhoneNumber(phoneNumber);
+  const { data, error } = await supabase.auth.updateUser({
+    phone: normalizedPhone,
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  return {
+    user: data.user,
+    phone: normalizedPhone,
+  };
+}
+
+export async function verifyPhoneOtp(
+  phoneNumber: string,
+  token: string,
+  type: MobileOtpType = 'phone_change',
+) {
+  assertSupabaseEnv();
+
+  const { data, error } = await supabase.auth.verifyOtp({
+    phone: normalizePhoneNumber(phoneNumber),
+    token: token.trim(),
+    type,
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
+export async function resendPhoneVerificationOtp(
+  phoneNumber: string,
+  type: MobileOtpType = 'phone_change',
+) {
+  assertSupabaseEnv();
+
+  const { error } = await supabase.auth.resend({
+    type,
+    phone: normalizePhoneNumber(phoneNumber),
+  });
+
+  if (error) {
+    throw error;
+  }
 }
 
 export async function completeEmailConfirmation(

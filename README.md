@@ -44,21 +44,21 @@ npm run start
 
 ## Common Commands
 
-| Command | Purpose |
-| --- | --- |
-| `npm run start` | Start Expo locally |
-| `npm run android` | Launch Android development session |
-| `npm run ios` | Launch iOS development session |
-| `npm run web` | Launch the web target |
-| `npm run lint` | Run ESLint |
-| `npm run lint:fix` | Auto-fix lint issues where possible |
-| `npm run format` | Format the repository with Prettier |
-| `npm run format:check` | Check formatting only |
-| `npm run typecheck` | Run TypeScript checks |
-| `npm run test` | Run the test suite |
-| `npm run test:ci` | Run tests with coverage for CI |
-| `npm run build:web` | Validate a production-style web export |
-| `npm run check` | Run lint, typecheck, and CI-style tests |
+| Command                | Purpose                                 |
+| ---------------------- | --------------------------------------- |
+| `npm run start`        | Start Expo locally                      |
+| `npm run android`      | Launch Android development session      |
+| `npm run ios`          | Launch iOS development session          |
+| `npm run web`          | Launch the web target                   |
+| `npm run lint`         | Run ESLint                              |
+| `npm run lint:fix`     | Auto-fix lint issues where possible     |
+| `npm run format`       | Format the repository with Prettier     |
+| `npm run format:check` | Check formatting only                   |
+| `npm run typecheck`    | Run TypeScript checks                   |
+| `npm run test`         | Run the test suite                      |
+| `npm run test:ci`      | Run tests with coverage for CI          |
+| `npm run build:web`    | Validate a production-style web export  |
+| `npm run check`        | Run lint, typecheck, and CI-style tests |
 
 ## Environment Variables
 
@@ -68,6 +68,16 @@ The app currently expects:
 - `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
 
 See [docs/ENVIRONMENT.md](./docs/ENVIRONMENT.md) for rules, examples, and security expectations.
+
+## Supabase OTP Setup
+
+The in-app signup flow now expects one-time codes instead of external confirmation links:
+
+- Email confirmation emails must use `{{ .Token }}` in the Supabase email template so users receive a 6-digit code inside the app.
+- Phone auth must be enabled in Supabase with an SMS provider so the app can send phone verification OTPs.
+- Sign up phone numbers should be entered in international format, for example `+2348012345678`.
+
+If the email template is still configured for `{{ .ConfirmationURL }}`, the legacy link-based confirmation route at `/auth/confirm` still works, but the preferred UX is the in-app OTP screen.
 
 ## Repository Standards
 
