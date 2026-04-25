@@ -1,41 +1,97 @@
-import { Stack,useRouter  } from 'expo-router';
+import { Redirect, Stack } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, Text, View } from 'react-native';
 
-import { GoovaAppStateProvider } from '@/features/app/providers/goova-app-state-provider';
-import { PaymentFlowProvider } from '@/features/payments/providers/payment-flow-provider';
-import { VerificationRequiredModal } from '@/features/verification/components/verification-required-modal';
-import {
-  useVerification,
-  VerificationProvider,
-} from '@/features/verification/providers/verification-provider';
-import { getVerificationJourneyRoute } from '@/features/verification/verification-access';
+import { supabase } from '@/lib/supabase';
 
-function VerificationPromptHost() {
-  const router = useRouter();
-  const { hideVerificationPrompt, isPromptVisible, profile, promptCopy } =
-    useVerification();
+const useAuth = () => {
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
 
-  return (
-    <VerificationRequiredModal
-      copy={promptCopy}
-      onClose={hideVerificationPrompt}
-      onVerifyNow={() => {
-        hideVerificationPrompt();
-        router.push(getVerificationJourneyRoute(profile) as never);
-      }}
-      visible={isPromptVisible}
-    />
-  );
-}
+  useEffect(() => {
+    const checkSession = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      setIsAuthenticated(!!session);
+    };
+
+    checkSession();
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+      setIsAuthenticated(!!session);
+    });
+
+    return () => authListener.subscription.unsubscribe();
+  }, []);
+
+  return isAuthenticated;
+};
 
 export default function ProtectedLayout() {
+  const isAuthenticated = useAuth();
+
+  if (isAuthenticated === null) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: '#0A0A0A',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <StatusBar style="light" />
+        <ActivityIndicator size="large" color="#0F766E" />
+        <Text
+          style={{
+            color: 'white',
+            marginTop: 20,
+            fontWeight: '600',
+            opacity: 0.5,
+            letterSpacing: 1,
+          }}
+        >
+          SECURE ACCESS...
+        </Text>
+      </View>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <Redirect href="/(public)/login" />;
+  }
+
   return (
-    <VerificationProvider>
-      <GoovaAppStateProvider>
-        <PaymentFlowProvider>
-          <Stack screenOptions={{ headerShown: false }} />
-          <VerificationPromptHost />
-        </PaymentFlowProvider>
-      </GoovaAppStateProvider>
-    </VerificationProvider>
+    <>
+      <StatusBar style="light" />
+      <Stack
+        screenOptions={{
+          headerShown: true,
+          headerStyle: { backgroundColor: '#000000' }, // Deep Black Header
+          headerTintColor: '#FFFFFF', // White Back Arrow/Text
+          headerTitleStyle: { fontWeight: 'bold', fontSize: 18 },
+          headerShadowVisible: false,
+          contentStyle: { backgroundColor: '#FFFFFF' }, // Pure White Body
+        }}
+      >
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+
+        <Stack.Screen name="activity/[activityId]" options={{ title: 'Transaction' }} />
+        <Stack.Screen name="payments/bank" options={{ title: 'Transfer' }} />
+        <Stack.Screen name="payments/international" options={{ title: 'Global' }} />
+        <Stack.Screen name="payments/new" options={{ title: 'New Payment' }} />
+        <Stack.Screen name="payments/review" options={{ title: 'Review' }} />
+        <Stack.Screen
+          name="payments/success"
+          options={{ headerShown: false, presentation: 'fullScreenModal' }}
+        />
+
+        <Stack.Screen name="account-details" options={{ title: 'My Details' }} />
+        <Stack.Screen name="add-money" options={{ title: 'Add Funds' }} />
+        <Stack.Screen name="analytics" options={{ title: 'Insights' }} />
+        <Stack.Screen name="verification" options={{ title: 'ID Check' }} />
+      </Stack>
+    </>
   );
 }

@@ -1,19 +1,38 @@
-import { Redirect, Stack, usePathname } from 'expo-router';
-
-import { useOnboarding } from '@/hooks/use-onboarding';
-import { isAuthConfirmationPath } from '@/lib/auth-deep-link';
+import { Stack } from 'expo-router';
 
 export default function PublicLayout() {
-  const pathname = usePathname();
-  const { isReady, shouldShowOnboarding } = useOnboarding();
-
-  if (!isReady) {
-    return null;
-  }
-
-  if (shouldShowOnboarding && pathname !== '/' && !isAuthConfirmationPath(pathname)) {
-    return <Redirect href="/" />;
-  }
-
-  return <Stack screenOptions={{ headerShown: false }} />;
+  return (
+    <Stack
+      screenOptions={{
+        headerShown: false,
+        contentStyle: {
+          backgroundColor: '#FFFFFF',
+        },
+      }}
+    >
+      <Stack.Screen
+        name="login"
+        options={{
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen name="signup-step1" options={{ headerShown: false }} />
+      <Stack.Screen name="signup-step2" options={{ headerShown: false }} />
+      <Stack.Screen name="signup-step3" options={{ headerShown: false }} />
+      <Stack.Screen name="signup-step4" options={{ headerShown: false }} />
+      <Stack.Screen name="signup-step5" options={{ headerShown: false }} />
+      <Stack.Screen
+        name="signup-step6"
+        options={{
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen
+        name="auth/confirm"
+        options={{
+          headerShown: false,
+        }}
+      />
+    </Stack>
+  );
 }

@@ -1,120 +1,57 @@
-import * as Linking from 'expo-linking';
-import { useRouter } from 'expo-router';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useEffect } from 'react';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
-import {
-  AuthConfirmationScreen,
-  type AuthConfirmationStatus,
-} from '@/features/auth/components/auth-confirmation-screen';
-import { useOnboarding } from '@/hooks/use-onboarding';
-import { useSession } from '@/hooks/use-session';
-import { toErrorMessage } from '@/lib/errors';
-import { completeEmailConfirmation } from '@/services/auth-service';
+import { supabase } from '@/lib/supabase';
 
-type ConfirmationState = {
-  status: AuthConfirmationStatus;
-  message: string;
-  primaryActionLabel?: string;
-  secondaryActionLabel?: string;
-};
-
-const initialState: ConfirmationState = {
-  status: 'pending',
-  message: 'We are securely confirming your email and preparing your account access.',
-};
-
-export default function AuthConfirmScreen() {
+export default function AuthConfirm() {
   const router = useRouter();
-  const linkingUrl = Linking.useLinkingURL();
-  const handledUrlRef = useRef<string | null>(null);
-  const [state, setState] = useState<ConfirmationState>(initialState);
-  const { finishOnboardingFlow, clearPostOnboardingRoute } = useOnboarding();
-  const { refreshSession } = useSession();
-  const currentUrl = useMemo(
-    () =>
-      linkingUrl ??
-      Linking.getLinkingURL() ??
-      (typeof window !== 'undefined' ? window.location.href : null),
-    [linkingUrl],
-  );
+  const { token, type } = useLocalSearchParams();
 
   useEffect(() => {
-    if (!currentUrl || handledUrlRef.current === currentUrl) {
-      return;
-    }
-
-    const confirmedUrl = currentUrl;
-
-    handledUrlRef.current = confirmedUrl;
-    let isActive = true;
-
-    async function confirmEmail() {
-      try {
-        const result = await completeEmailConfirmation(confirmedUrl);
-
-        await finishOnboardingFlow();
-        clearPostOnboardingRoute();
-        await refreshSession();
-
-        if (!isActive) {
-          return;
-        }
-
-        if (result.session) {
-          setState({
-            status: 'success',
-            message: result.message,
+    const verifyEmail = async () => {
+      if (token && type === 'signup') {
+        try {
+          const { error } = await supabase.auth.verifyOtp({
+            token_hash: token as string,
+            type: 'signup',
           });
 
-          router.replace('/home');
-          return;
+          if (!error) {
+            router.replace('/(protected)/(tabs)' as any);
+          } else {
+            console.error('Verification error:', error.message);
+            router.replace('/(public)/login');
+          }
+        } catch (err) {
+          console.error('System error during verification:', err);
+          router.replace('/(public)/login');
         }
-
-        setState({
-          status: 'success',
-          message: result.message,
-          primaryActionLabel: 'Go to log in',
-        });
-      } catch (error) {
-        if (!isActive) {
-          return;
-        }
-
-        setState({
-          status: 'error',
-          message: toErrorMessage(
-            error,
-            'We could not complete your email confirmation.',
-          ),
-          primaryActionLabel: 'Back to log in',
-          secondaryActionLabel: 'Create account',
-        });
       }
-    }
-
-    void confirmEmail();
-
-    return () => {
-      isActive = false;
     };
-  }, [
-    clearPostOnboardingRoute,
-    currentUrl,
-    finishOnboardingFlow,
-    refreshSession,
-    router,
-  ]);
+
+    verifyEmail();
+  }, [token, type, router]);
 
   return (
-    <AuthConfirmationScreen
-      status={state.status}
-      message={state.message}
-      primaryActionLabel={state.primaryActionLabel}
-      onPrimaryAction={() =>
-        router.replace(state.status === 'success' ? '/login' : '/login')
-      }
-      secondaryActionLabel={state.secondaryActionLabel}
-      onSecondaryAction={() => router.replace('/signup')}
-    />
+    <View style={styles.container}>
+      <ActivityIndicator size="large" color="#0F766E" />
+      <Text style={styles.text}>Finalizing your secure account...</Text>
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#0A0A0A',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  text: {
+    color: 'white',
+    marginTop: 20,
+    fontWeight: '600',
+    opacity: 0.7,
+  },
+});
