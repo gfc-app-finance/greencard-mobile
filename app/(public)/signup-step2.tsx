@@ -16,6 +16,8 @@ import {
 import Animated, { useAnimatedStyle, withTiming } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { resendSignupEmailOtp, verifyEmailOtp } from '@/services/auth-service';
+
 const BRAND_TEAL = '#0F766E';
 
 const AnimatedOtpBox = ({
@@ -49,10 +51,14 @@ const AnimatedOtpBox = ({
 
 export default function SignupStep2() {
   const router = useRouter();
-  const { email } = useLocalSearchParams();
+
+  const params = useLocalSearchParams();
+  const email = params.email as unknown as string;
+
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [focusedIndex, setFocusedIndex] = useState<number | null>(0);
   const [timer, setTimer] = useState(59);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const inputRefs = useRef<(TextInput | null)[]>([]);
 
   useEffect(() => {
@@ -78,11 +84,46 @@ export default function SignupStep2() {
     }
   };
 
+  const handleVerify = async () => {
+    const code = otp.join('');
+
+    if (code.length !== 6) {
+      alert('Please enter the full 6-digit code.');
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      await verifyEmailOtp(email, code);
+
+      router.push({
+        pathname: '/(public)/signup-step3',
+        params: { email },
+      });
+    } catch (error: any) {
+      alert(error.message || 'Invalid verification code. Check your email again.');
+      setOtp(['', '', '', '', '', '']);
+      inputRefs.current[0]?.focus();
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleResend = async () => {
+    try {
+      await resendSignupEmailOtp(email);
+      setTimer(59);
+      alert('A fresh code has been sent to your inbox.');
+    } catch (error: any) {
+      alert(error.message || 'Could not resend code.');
+    }
+  };
+
   return (
     <View style={styles.outerWrapper}>
       <StatusBar style="dark" />
       <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
-        {/* NAV BAR */}
         <View style={styles.topNav}>
           <TouchableOpacity onPress={() => router.back()} style={styles.navIcon}>
             <ChevronLeft size={30} color="#111827" strokeWidth={2.5} />
@@ -113,7 +154,6 @@ export default function SignupStep2() {
                   </Text>
                 </View>
 
-                {/* OTP INPUT ROW */}
                 <View style={styles.otpRow}>
                   {otp.map((digit, index) => (
                     <AnimatedOtpBox
@@ -134,6 +174,8 @@ export default function SignupStep2() {
                         onChangeText={(v) => handleOtpChange(v, index)}
                         onKeyPress={(e) => handleKeyPress(e, index)}
                         autoFocus={index === 0}
+                        textContentType="oneTimeCode"
+                        autoComplete="one-time-code"
                       />
                     </AnimatedOtpBox>
                   ))}

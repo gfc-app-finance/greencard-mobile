@@ -3,7 +3,7 @@ import { StatusBar } from 'expo-status-bar';
 import { ChevronLeft, MessagesSquare } from 'lucide-react-native';
 import React, { useState } from 'react';
 import {
-  Keyboard,
+  Keyboard as RNKeyboard,
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
@@ -13,30 +13,36 @@ import {
   TouchableWithoutFeedback,
   View,
 } from 'react-native';
+import CountryPicker, { Country, CountryCode } from 'react-native-country-picker-modal';
 import Animated, { useAnimatedStyle, withTiming } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+import { useFormSecurity } from '@/hooks/use-form-security';
 
 const BRAND_TEAL = '#0F766E';
 
 const AnimatedInputBox = ({
   focused,
+  hasError,
   children,
 }: {
   focused: boolean;
+  hasError?: boolean;
   children: React.ReactNode;
 }) => {
   const animatedStyle = useAnimatedStyle(() => {
     return {
-      borderColor: withTiming(focused ? BRAND_TEAL : '#E2E8F0', { duration: 250 }),
+      borderColor: withTiming(hasError ? '#EF4444' : focused ? BRAND_TEAL : '#E2E8F0', {
+        duration: 250,
+      }),
       backgroundColor: withTiming(focused ? '#FFFFFF' : '#F8FAFC', { duration: 250 }),
-      shadowColor: BRAND_TEAL,
+      shadowColor: hasError ? '#EF4444' : BRAND_TEAL,
       shadowOpacity: withTiming(focused ? 0.3 : 0, { duration: 250 }),
       shadowRadius: 15,
       elevation: withTiming(focused ? 5 : 0, { duration: 250 }),
       transform: [{ scale: withTiming(focused ? 1.01 : 1, { duration: 200 }) }],
     };
   });
-
   return (
     <Animated.View style={[styles.inputWrapper, animatedStyle]}>{children}</Animated.View>
   );
@@ -44,13 +50,30 @@ const AnimatedInputBox = ({
 
 export default function SignupStep3() {
   const router = useRouter();
-  const [phone, setPhone] = useState('');
+
+  const { form, errors, isFormValid, updateField, validateField } = useFormSecurity(
+    { phoneNumber: '' },
+    ['phoneNumber'],
+  );
+
   const [isFocused, setIsFocused] = useState(false);
+  const [countryCode, setCountryCode] = useState<CountryCode>('NG');
+  const [callingCode, setCallingCode] = useState('234');
+  const [showPicker, setShowPicker] = useState(false);
+
+  const onSelect = (country: Country) => {
+    setCallingCode(country.callingCode[0]);
+    setCountryCode(country.cca2);
+    setShowPicker(false);
+    validateField('phoneNumber', form.phoneNumber);
+  };
 
   const handleContinue = () => {
+    if (!isFormValid) return;
+    const fullPhone = `+${callingCode}${form.phoneNumber}`;
     router.push({
       pathname: '/(public)/signup-step4',
-      params: { phone: `+234 ${phone}` },
+      params: { phone: fullPhone },
     });
   };
 
@@ -58,7 +81,6 @@ export default function SignupStep3() {
     <View style={styles.outerWrapper}>
       <StatusBar style="dark" />
       <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
-        {/* NAV BAR */}
         <View style={styles.topNav}>
           <TouchableOpacity onPress={() => router.back()} style={styles.navIcon}>
             <ChevronLeft size={30} color="#111827" strokeWidth={2.5} />
@@ -76,44 +98,66 @@ export default function SignupStep3() {
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={{ flex: 1 }}
         >
-          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <TouchableWithoutFeedback onPress={RNKeyboard.dismiss}>
             <View style={styles.mainContent}>
               <View>
                 <View style={styles.textSection}>
                   <Text style={styles.mainTitle}>{"What's your phone number?"}</Text>
                   <Text style={styles.mainSubtitle}>
-                    {"We'll send a verification code to this number"}
+                    {'We will send a verification code to this number'}
                   </Text>
                 </View>
 
-                {/* PHONE INPUT GROUP */}
                 <View style={styles.fieldGroup}>
                   <Text style={styles.fieldLabel}>Mobile Number</Text>
-                  <AnimatedInputBox focused={isFocused}>
-                    <View style={styles.countryPicker}>
-                      <Text style={styles.flag}>🇳🇬</Text>
-                      <Text style={styles.countryCode}>+234</Text>
+                  <AnimatedInputBox focused={isFocused} hasError={!!errors.phoneNumber}>
+                    <TouchableOpacity
+                      onPress={() => setShowPicker(true)}
+                      style={styles.countryPicker}
+                    >
+                      <CountryPicker
+                        {...{
+                          countryCode,
+                          withFilter: true,
+                          withFlag: true,
+                          withCallingCode: true,
+                          withEmoji: true,
+                          onSelect,
+                          visible: showPicker,
+                          onClose: () => setShowPicker(false),
+                        }}
+                        containerButtonStyle={{ marginLeft: -10 }}
+                      />
+                      <Text style={styles.countryCode}>+{callingCode}</Text>
                       <View style={styles.divider} />
-                    </View>
+                    </TouchableOpacity>
                     <TextInput
                       style={styles.fieldInput}
                       placeholder="803 000 0000"
                       placeholderTextColor="#94A3B8"
                       keyboardType="phone-pad"
-                      value={phone}
-                      onChangeText={setPhone}
+                      value={form.phoneNumber}
+                      onChangeText={(t) =>
+                        updateField('phoneNumber', t.replace(/\D/g, ''))
+                      }
                       onFocus={() => setIsFocused(true)}
-                      onBlur={() => setIsFocused(false)}
+                      onBlur={() => {
+                        setIsFocused(false);
+                        validateField('phoneNumber', form.phoneNumber);
+                      }}
                     />
                   </AnimatedInputBox>
+                  {errors.phoneNumber ? (
+                    <Text style={styles.errorText}>{errors.phoneNumber}</Text>
+                  ) : null}
                 </View>
               </View>
 
               <View style={styles.actionSection}>
                 <TouchableOpacity
-                  style={[styles.btnPrimary, phone.length < 10 && { opacity: 0.5 }]}
+                  style={[styles.btnPrimary, !isFormValid && { opacity: 0.5 }]}
                   onPress={handleContinue}
-                  disabled={phone.length < 10}
+                  disabled={!isFormValid}
                 >
                   <Text style={styles.btnText}>Continue</Text>
                 </TouchableOpacity>
@@ -138,7 +182,6 @@ const styles = StyleSheet.create({
   navIcon: { padding: 6 },
   progressContainer: { height: 2, backgroundColor: '#F1F5F9', width: '100%' },
   progressActive: { height: '100%', backgroundColor: BRAND_TEAL },
-
   mainContent: {
     flex: 1,
     paddingHorizontal: 24,
@@ -155,7 +198,6 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   mainSubtitle: { fontSize: 16, color: '#64748B', fontWeight: '400', lineHeight: 24 },
-
   fieldGroup: { gap: 8 },
   fieldLabel: {
     fontSize: 12,
@@ -165,7 +207,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.6,
     marginLeft: 4,
   },
-
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -174,12 +215,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     height: 64,
   },
-
   countryPicker: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   flag: { fontSize: 20 },
   countryCode: { fontSize: 16, fontWeight: '700', color: '#0F172A' },
   divider: { width: 1.5, height: 24, backgroundColor: '#E2E8F0', marginHorizontal: 12 },
-
   fieldInput: {
     flex: 1,
     fontSize: 18,
@@ -187,7 +226,13 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 1,
   },
-
+  errorText: {
+    fontSize: 12,
+    color: '#EF4444',
+    fontWeight: '600',
+    marginTop: 8,
+    marginLeft: 4,
+  },
   actionSection: { alignItems: 'center' },
   btnPrimary: {
     backgroundColor: BRAND_TEAL,

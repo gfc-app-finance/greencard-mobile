@@ -3,6 +3,7 @@ import { StatusBar } from 'expo-status-bar';
 import { ChevronLeft, MessagesSquare } from 'lucide-react-native';
 import React, { useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
@@ -50,7 +51,7 @@ const AnimatedOtpBox = ({
 export default function SignupStep4() {
   const router = useRouter();
   const { phone } = useLocalSearchParams();
-
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [focusedIndex, setFocusedIndex] = useState<number | null>(0);
   const [timer, setTimer] = useState(59);
@@ -76,6 +77,24 @@ export default function SignupStep4() {
     if (e.nativeEvent.key === 'Backspace' && otp[index] === '' && index > 0) {
       inputRefs.current[index - 1]?.focus();
     }
+  };
+
+  useEffect(() => {
+    const code = otp.join('');
+    if (code.length === 6) {
+      setTimeout(() => {
+        handleVerify();
+      }, 500);
+    }
+  }, [otp]);
+
+  const handleVerify = () => {
+    setIsSubmitting(true);
+
+    setTimeout(() => {
+      setIsSubmitting(false);
+      router.push('/(public)/signup-step5');
+    }, 1500);
   };
 
   return (
@@ -151,11 +170,18 @@ export default function SignupStep4() {
 
               <View style={styles.actionSection}>
                 <TouchableOpacity
-                  style={[styles.btnPrimary, otp.join('').length < 6 && { opacity: 0.5 }]}
-                  onPress={() => router.push('/(public)/signup-step5')}
-                  disabled={otp.join('').length < 6}
+                  style={[
+                    styles.btnPrimary,
+                    (otp.join('').length < 6 || isSubmitting) && { opacity: 0.5 },
+                  ]}
+                  onPress={handleVerify}
+                  disabled={otp.join('').length < 6 || isSubmitting}
                 >
-                  <Text style={styles.btnText}>Continue</Text>
+                  {isSubmitting ? (
+                    <ActivityIndicator color="white" />
+                  ) : (
+                    <Text style={styles.btnText}>Continue</Text>
+                  )}
                 </TouchableOpacity>
               </View>
             </View>

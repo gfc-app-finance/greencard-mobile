@@ -1,13 +1,42 @@
-/**
- * FIXED: Neutralized version for the Fresh Start build.
- * We removed the @/features import to kill the TS2307 error.
- */
+import { Session } from '@supabase/supabase-js';
+import { useEffect, useState } from 'react';
+
+import { supabase } from '@/lib/supabase';
+
 export function useSession() {
-  // We return a "Mock" session so your app doesn't crash
+  const [session, setSession] = useState<Session | null>(null);
+  const [isReady, setIsReady] = useState(false);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setIsReady(true);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      setIsReady(true);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const signOut = async () => {
+    await supabase.auth.signOut();
+  };
+
+  const refreshSession = async () => {
+    const { data } = await supabase.auth.getSession();
+    setSession(data.session);
+  };
+
   return {
-    isReady: true,
-    session: null,
-    signOut: () => console.log('Logged out'),
-    refreshSession: async () => {},
+    isReady,
+    session,
+    user: session?.user ?? null,
+    signOut,
+    refreshSession,
   };
 }

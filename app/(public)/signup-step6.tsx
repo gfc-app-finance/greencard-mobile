@@ -32,7 +32,7 @@ export default function SignupStep6() {
   }));
 
   const handleFinish = () => {
-    const path = `/(protected)/(tabs)` as any;
+    const path = `/(protected)` as any;
     router.replace(path);
   };
 
@@ -47,7 +47,6 @@ export default function SignupStep6() {
           </TouchableOpacity>
         </View>
 
-        {/* PROGRESS (100%) */}
         <View style={styles.progressContainer}>
           <View style={[styles.progressActive, { width: '100%' }]} />
         </View>
@@ -68,13 +67,12 @@ export default function SignupStep6() {
               <Text style={styles.mainTitle}>{"You're all set!"}</Text>
               <Text style={styles.mainSubtitle}>
                 {
-                  "Welcome to Greencard. You're now ready for seamless global payments without borders."
+                  'Welcome to GreenCard. You are now ready for seamless global payments without borders.'
                 }
               </Text>
             </Animated.View>
           </View>
 
-          {/* FINAL CTA */}
           <Animated.View
             entering={FadeInUp.delay(600).duration(800)}
             style={styles.actionSection}

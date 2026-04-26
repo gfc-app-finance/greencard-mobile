@@ -10,6 +10,7 @@ import {
 } from 'lucide-react-native';
 import React, { useState } from 'react';
 import {
+  Alert,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
@@ -24,24 +25,31 @@ import {
 import Animated, { useAnimatedStyle, withTiming } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { useFormSecurity } from '@/hooks/use-form-security';
+import { supabase } from '@/lib/supabase';
+
 const BRAND_TEAL = '#0F766E';
 const BRAND_SOFT = '#DFF4F1';
 
 const AnimatedInputBox = ({
   focused,
+  hasError,
   children,
 }: {
   focused: boolean;
+  hasError?: boolean;
   children: React.ReactNode;
 }) => {
   const animatedStyle = useAnimatedStyle(() => {
     return {
-      borderColor: withTiming(focused ? BRAND_TEAL : '#E5E7EB', { duration: 250 }),
+      borderColor: withTiming(hasError ? '#EF4444' : focused ? BRAND_TEAL : '#E5E7EB', {
+        duration: 250,
+      }),
       backgroundColor: withTiming(focused ? '#FFFFFF' : '#F8FAFC', { duration: 250 }),
-      shadowColor: BRAND_TEAL,
-      shadowOpacity: withTiming(focused ? 0.3 : 0, { duration: 250 }),
-      shadowRadius: withTiming(focused ? 15 : 0, { duration: 250 }),
-      elevation: withTiming(focused ? 5 : 0, { duration: 250 }),
+      shadowColor: hasError ? '#EF4444' : BRAND_TEAL,
+      shadowOpacity: withTiming(focused || hasError ? 0.3 : 0, { duration: 250 }),
+      shadowRadius: withTiming(focused || hasError ? 15 : 0, { duration: 250 }),
+      elevation: withTiming(focused || hasError ? 5 : 0, { duration: 250 }),
       transform: [{ scale: withTiming(focused ? 1.01 : 1, { duration: 200 }) }],
     };
   });
@@ -53,10 +61,43 @@ const AnimatedInputBox = ({
 
 export default function LoginScreen() {
   const router = useRouter();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [focusedField, setFocusedField] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const { form, errors, isFormValid, updateField, validateField, setAuthError } =
+    useFormSecurity({ email: '', password: '' }, ['email', 'password']);
+
+  const handleLogin = async () => {
+    if (!isFormValid || loading) return;
+
+    Keyboard.dismiss();
+    setLoading(true);
+
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: form.email,
+        password: form.password,
+      });
+
+      if (error) {
+        setLoading(false);
+        const msg = error.message.includes('Invalid login credentials')
+          ? 'Incorrect email or password.'
+          : error.message;
+
+        Alert.alert('Login Failed', msg);
+        return;
+      }
+
+      if (data.session) {
+        router.replace('/(protected)/(tabs)');
+      }
+    } catch (err) {
+      setLoading(false);
+      Alert.alert('Error', 'Network request failed.');
+    }
+  };
 
   return (
     <View style={styles.mainContainer}>
@@ -72,7 +113,7 @@ export default function LoginScreen() {
               <View style={styles.gLogoBox}>
                 <Text style={styles.gLogoText}>G</Text>
               </View>
-              <Text style={styles.greencardText}>Greencard</Text>
+              <Text style={styles.greencardText}>GreenCard</Text>
             </View>
             <TouchableOpacity style={styles.headerIcon}>
               <MessagesSquare size={24} color="white" strokeWidth={2} />
@@ -106,23 +147,38 @@ export default function LoginScreen() {
                 <View style={styles.form}>
                   <View style={styles.inputGroup}>
                     <Text style={styles.label}>Email Address</Text>
-                    <AnimatedInputBox focused={focusedField === 'email'}>
+                    <AnimatedInputBox
+                      focused={focusedField === 'email'}
+                      hasError={!!errors.email}
+                    >
                       <Mail
                         size={20}
-                        color={focusedField === 'email' ? BRAND_TEAL : '#94A3B8'}
+                        color={
+                          errors.email
+                            ? '#EF4444'
+                            : focusedField === 'email'
+                              ? BRAND_TEAL
+                              : '#94A3B8'
+                        }
                       />
                       <TextInput
                         style={styles.input}
-                        placeholder="name@email.com"
+                        placeholder="name@gcf.com"
                         placeholderTextColor="#94A3B8"
                         onFocus={() => setFocusedField('email')}
-                        onBlur={() => setFocusedField(null)}
-                        value={email}
-                        onChangeText={setEmail}
+                        onBlur={() => {
+                          setFocusedField(null);
+                          validateField('email', form.email);
+                        }}
+                        value={form.email}
+                        onChangeText={(t) => updateField('email', t)}
                         keyboardType="email-address"
                         autoCapitalize="none"
                       />
                     </AnimatedInputBox>
+                    {errors.email ? (
+                      <Text style={styles.errorText}>{errors.email}</Text>
+                    ) : null}
                   </View>
 
                   <View style={styles.inputGroup}>
@@ -132,20 +188,32 @@ export default function LoginScreen() {
                         <Text style={styles.forgotText}>Forgot Password?</Text>
                       </TouchableOpacity>
                     </View>
-                    <AnimatedInputBox focused={focusedField === 'password'}>
+                    <AnimatedInputBox
+                      focused={focusedField === 'password'}
+                      hasError={!!errors.password}
+                    >
                       <Lock
                         size={20}
-                        color={focusedField === 'password' ? BRAND_TEAL : '#94A3B8'}
+                        color={
+                          errors.password
+                            ? '#EF4444'
+                            : focusedField === 'password'
+                              ? BRAND_TEAL
+                              : '#94A3B8'
+                        }
                       />
                       <TextInput
                         style={styles.input}
                         placeholder="••••••••"
                         placeholderTextColor="#94A3B8"
                         onFocus={() => setFocusedField('password')}
-                        onBlur={() => setFocusedField(null)}
+                        onBlur={() => {
+                          setFocusedField(null);
+                          validateField('password', form.password);
+                        }}
                         secureTextEntry={!showPassword}
-                        value={password}
-                        onChangeText={setPassword}
+                        value={form.password}
+                        onChangeText={(t) => updateField('password', t)}
                       />
                       <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
                         {showPassword ? (
@@ -155,16 +223,30 @@ export default function LoginScreen() {
                         )}
                       </TouchableOpacity>
                     </AnimatedInputBox>
+                    {errors.password ? (
+                      <Text style={styles.errorText}>{errors.password}</Text>
+                    ) : null}
                   </View>
                 </View>
 
-                <TouchableOpacity style={styles.primaryButton} activeOpacity={0.8}>
-                  <Text style={styles.primaryButtonText}>Log in</Text>
+                <TouchableOpacity
+                  style={[
+                    styles.primaryButton,
+                    (!isFormValid || loading) && styles.btnDisabled,
+                  ]}
+                  onPress={handleLogin}
+                  disabled={!isFormValid || loading}
+                >
+                  <Text style={styles.primaryButtonText}>
+                    {loading ? 'Logging in...' : 'Log in'}
+                  </Text>
                 </TouchableOpacity>
               </View>
 
               <View style={styles.footerContainer}>
-                <TouchableOpacity onPress={() => router.push('/(public)/signup-step1')}>
+                <TouchableOpacity
+                  onPress={() => router.push('/(public)/signup-step1' as any)}
+                >
                   <Text style={styles.switchText}>
                     New user?{' '}
                     <Text style={{ color: BRAND_TEAL, fontWeight: '700' }}>
@@ -261,6 +343,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   input: { flex: 1, color: '#111827', fontSize: 16, fontWeight: '600' },
+  errorText: { color: '#EF4444', fontSize: 12, fontWeight: '600', marginLeft: 4 },
   primaryButton: {
     width: '100%',
     backgroundColor: BRAND_TEAL,
@@ -270,8 +353,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 30,
   },
+  btnDisabled: { backgroundColor: '#E2E8F0', opacity: 0.8 },
   primaryButtonText: { color: 'white', fontSize: 18, fontWeight: '800' },
-
   footerContainer: { alignItems: 'center', marginTop: 30, gap: 12 },
   switchText: { fontSize: 15, color: '#6B7280' },
   versionText: { fontSize: 12, color: '#9CA3AF', fontWeight: '500' },

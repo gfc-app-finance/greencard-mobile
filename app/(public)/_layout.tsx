@@ -27,12 +27,6 @@ export default function PublicLayout() {
           headerShown: false,
         }}
       />
-      <Stack.Screen
-        name="auth/confirm"
-        options={{
-          headerShown: false,
-        }}
-      />
     </Stack>
   );
 }

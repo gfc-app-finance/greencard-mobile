@@ -6,9 +6,7 @@ import { Platform } from 'react-native';
 import { authStorage } from './storage';
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey =
-  process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
-  process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
+const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY!;
 const isBrowser = Platform.OS === 'web' && typeof window !== 'undefined';
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {

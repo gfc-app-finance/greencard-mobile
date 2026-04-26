@@ -1,8 +1,36 @@
-// This stops the "Module not found" error because it removes the @/features import
+import { Session } from '@supabase/supabase-js';
+import { useEffect, useState } from 'react';
+
+import { supabase } from '@/lib/supabase';
+
 export function useSession() {
-  return { isReady: true, session: null }; // Pretend the engine is ready but no one is logged in
+  const [session, setSession] = useState<Session | null>(null);
+  const [isReady, setIsReady] = useState(false);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setIsReady(true);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  return { isReady, session, user: session?.user ?? null };
 }
 
 export function useOnboarding() {
-  return { isReady: true, shouldShowOnboarding: true }; // Pretend we always show the start page
+  return {
+    isReady: true,
+    shouldShowOnboarding: true,
+    finishOnboarding: async () => {
+      console.log('Onboarding Complete - User is ready for the Dashboard');
+    },
+  };
 }
