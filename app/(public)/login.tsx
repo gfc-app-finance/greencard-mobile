@@ -65,8 +65,10 @@ export default function LoginScreen() {
   const [focusedField, setFocusedField] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const { form, errors, isFormValid, updateField, validateField, setAuthError } =
-    useFormSecurity({ email: '', password: '' }, ['email', 'password']);
+  const { form, errors, isFormValid, updateField, validateField } = useFormSecurity(
+    { email: '', password: '' },
+    ['email', 'password'],
+  );
 
   const handleLogin = async () => {
     if (!isFormValid || loading) return;
@@ -93,7 +95,7 @@ export default function LoginScreen() {
       if (data.session) {
         router.replace('/(protected)/(tabs)');
       }
-    } catch (err) {
+    } catch {
       setLoading(false);
       Alert.alert('Error', 'Network request failed.');
     }

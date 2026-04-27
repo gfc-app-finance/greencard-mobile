@@ -1,5 +1,4 @@
-import { Stack, useRouter } from 'expo-router';
-import { View } from 'react-native';
+import { Stack } from 'expo-router';
 
 const VerificationProvider = ({ children }: any) => <>{children}</>;
 const GoovaAppStateProvider = ({ children }: any) => <>{children}</>;

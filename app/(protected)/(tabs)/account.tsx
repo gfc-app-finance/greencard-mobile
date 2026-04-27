@@ -6,7 +6,6 @@ import {
   HelpCircle,
   LogOut,
   ShieldCheck,
-  User,
 } from 'lucide-react-native';
 import React from 'react';
 import { ScrollView, Switch, Text, TouchableOpacity, View } from 'react-native';

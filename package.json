@@ -52,7 +52,6 @@
     "lucide-react-native": "^1.8.0",
     "nativewind": "^4.2.3",
     "react": "19.1.0",
-    "react-async-hook": "^4.0.0",
     "react-dom": "19.1.0",
     "react-hook-form": "^7.72.1",
     "react-native": "0.81.5",
@@ -87,7 +86,8 @@
     "typescript": "~5.9.2"
   },
   "overrides": {
-    "react-test-renderer": "19.1.0"
+    "react-test-renderer": "19.1.0",
+    "react-async-hook": "4.0.0"
   },
   "private": true
 }

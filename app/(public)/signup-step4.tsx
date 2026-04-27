@@ -86,6 +86,7 @@ export default function SignupStep4() {
         handleVerify();
       }, 500);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [otp]);
 
   const handleVerify = () => {

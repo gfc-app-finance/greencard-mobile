@@ -76,7 +76,7 @@ export default function SignupStep1() {
         return;
       }
       router.push({ pathname: '/(public)/signup-step2', params: { email: form.email } });
-    } catch (err) {
+    } catch {
       alert('Connection error.');
     }
   };

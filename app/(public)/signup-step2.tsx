@@ -16,8 +16,6 @@ import {
 import Animated, { useAnimatedStyle, withTiming } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { resendSignupEmailOtp, verifyEmailOtp } from '@/services/auth-service';
-
 const BRAND_TEAL = '#0F766E';
 
 const AnimatedOtpBox = ({
@@ -58,7 +56,7 @@ export default function SignupStep2() {
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [focusedIndex, setFocusedIndex] = useState<number | null>(0);
   const [timer, setTimer] = useState(59);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  // const [, setIsSubmitting] = useState(false);
   const inputRefs = useRef<(TextInput | null)[]>([]);
 
   useEffect(() => {
@@ -84,7 +82,8 @@ export default function SignupStep2() {
     }
   };
 
-  const handleVerify = async () => {
+  /*
+  const _handleVerify = async () => {
     const code = otp.join('');
 
     if (code.length !== 6) {
@@ -110,7 +109,7 @@ export default function SignupStep2() {
     }
   };
 
-  const handleResend = async () => {
+  const _handleResend = async () => {
     try {
       await resendSignupEmailOtp(email);
       setTimer(59);
@@ -119,6 +118,7 @@ export default function SignupStep2() {
       alert(error.message || 'Could not resend code.');
     }
   };
+*/
 
   return (
     <View style={styles.outerWrapper}>

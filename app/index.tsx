@@ -1,17 +1,9 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import {
-  ArrowUpDown,
-  Circle,
-  CreditCard,
-  Globe,
-  Plane,
-  Shield,
-  Sparkles,
-} from 'lucide-react-native';
+import { Circle, CreditCard, Globe, Plane, Shield, Sparkles } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
-import { Dimensions, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Animated, {
   Easing,
   FadeIn,
@@ -66,6 +58,7 @@ const AnimatedGlobe = () => {
       -1,
       false,
     );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const style = useAnimatedStyle(() => ({
     transform: [{ rotate: `${rotate.value}deg` }],
@@ -89,6 +82,7 @@ const AnimatedCurrency = () => {
       -1,
       true,
     );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   return (
     <View style={styles.animationContainer}>
@@ -120,6 +114,7 @@ const AnimatedPlane = () => {
       -1,
       true,
     );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const style = useAnimatedStyle(() => ({
     transform: [{ translateX: translateX.value }, { rotate: '-10deg' }],
@@ -143,6 +138,7 @@ const AnimatedShield = () => {
       -1,
       true,
     );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const style = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
   return (
@@ -164,6 +160,7 @@ const AnimatedNetwork = () => {
       -1,
       false,
     );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const style = useAnimatedStyle(() => ({
     transform: [{ rotate: `${rotate.value}deg` }],

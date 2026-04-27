@@ -29,8 +29,6 @@ export function useOnboarding() {
   return {
     isReady: true,
     shouldShowOnboarding: true,
-    finishOnboarding: async () => {
-      console.log('Onboarding Complete - User is ready for the Dashboard');
-    },
+    finishOnboarding: async () => {},
   };
 }
