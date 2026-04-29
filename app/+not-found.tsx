@@ -1,47 +1,29 @@
-import { useRouter } from 'expo-router';
+import { Link, Stack } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { AppButton } from '@/components/ui/app-button';
-import { AppCard } from '@/components/ui/app-card';
-import { AppScreen } from '@/components/ui/app-screen';
-import { Colors } from '@/constants/colors';
-import { Spacing } from '@/constants/theme';
-
 export default function NotFoundScreen() {
-  const router = useRouter();
-
   return (
-    <AppScreen>
+    <>
+      <Stack.Screen options={{ title: 'Oops!', headerShown: false }} />
       <View style={styles.container}>
-        <AppCard style={styles.card}>
-          <Text style={styles.title}>Screen not found</Text>
-          <Text style={styles.description}>
-            That route does not exist in the Greencard router yet.
-          </Text>
-          <AppButton title="Go to welcome" onPress={() => router.replace('/')} />
-        </AppCard>
+        <Text style={styles.title}>This page doesn&apos;t exist.</Text>
+        <Link href="/" style={styles.link}>
+          <Text style={styles.linkText}>Go to home screen!</Text>
+        </Link>
       </View>
-    </AppScreen>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 320,
+    padding: 20,
+    backgroundColor: '#0A0A0A',
   },
-  card: {
-    gap: Spacing.md,
-  },
-  title: {
-    color: Colors.text,
-    fontSize: 24,
-    fontWeight: '700',
-  },
-  description: {
-    color: Colors.textMuted,
-    fontSize: 15,
-    lineHeight: 22,
-  },
+  title: { fontSize: 20, fontWeight: 'bold', color: 'white' },
+  link: { marginTop: 15, paddingVertical: 15 },
+  linkText: { fontSize: 14, color: '#0F766E', fontWeight: 'bold' },
 });

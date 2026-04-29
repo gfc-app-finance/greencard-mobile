@@ -1,13 +1,42 @@
-import { useContext } from 'react';
+import { Session } from '@supabase/supabase-js';
+import { useEffect, useState } from 'react';
 
-import { SessionContext } from '@/features/auth/providers/session-provider';
+import { supabase } from '@/lib/supabase';
 
 export function useSession() {
-  const context = useContext(SessionContext);
+  const [session, setSession] = useState<Session | null>(null);
+  const [isReady, setIsReady] = useState(false);
 
-  if (!context) {
-    throw new Error('useSession must be used within SessionProvider');
-  }
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setIsReady(true);
+    });
 
-  return context;
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      setIsReady(true);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const signOut = async () => {
+    await supabase.auth.signOut();
+  };
+
+  const refreshSession = async () => {
+    const { data } = await supabase.auth.getSession();
+    setSession(data.session);
+  };
+
+  return {
+    isReady,
+    session,
+    user: session?.user ?? null,
+    signOut,
+    refreshSession,
+  };
 }

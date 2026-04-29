@@ -1,13 +1,34 @@
-import { useContext } from 'react';
+import { Session } from '@supabase/supabase-js';
+import { useEffect, useState } from 'react';
 
-import { OnboardingContext } from '@/features/auth/providers/onboarding-provider';
+import { supabase } from '@/lib/supabase';
+
+export function useSession() {
+  const [session, setSession] = useState<Session | null>(null);
+  const [isReady, setIsReady] = useState(false);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setIsReady(true);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  return { isReady, session, user: session?.user ?? null };
+}
 
 export function useOnboarding() {
-  const context = useContext(OnboardingContext);
-
-  if (!context) {
-    throw new Error('useOnboarding must be used within OnboardingProvider');
-  }
-
-  return context;
+  return {
+    isReady: true,
+    shouldShowOnboarding: true,
+    finishOnboarding: async () => {},
+  };
 }

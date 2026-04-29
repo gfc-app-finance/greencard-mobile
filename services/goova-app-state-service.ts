@@ -1,6 +1,5 @@
 import type { User } from '@supabase/supabase-js';
 
-import { Colors } from '@/constants/colors';
 import { formatCurrencyAmount } from '@/lib/currency';
 import { getUserFirstName, getUserInitials } from '@/lib/user';
 import { getMockRecentPayments } from '@/services/payments-service';
@@ -29,6 +28,20 @@ import type {
   TransferTransaction,
 } from '@/types/fintech';
 import type { PaymentRecord, PaymentTimelineStep } from '@/types/payments';
+
+const Colors = {
+  primary: '#0F766E', // Brand Teal
+  primaryStrong: '#0F766E', // Used in Quick Actions
+  primarySoft: '#DFF4F1', // Used for backgrounds/glows
+  secondary: '#64748B', // Slate grey
+  text: '#111827', // Near black
+  violet: '#7C3AED', // Purple accent
+  violetSoft: '#F5F3FF', // Light purple background
+  info: '#3B82F6', // Blue
+  success: '#10B981', // Green
+  danger: '#EF4444', // Red
+  warning: '#F59E0B', // Amber
+};
 
 const accountStatusLabels: Record<AccountStatus, string> = {
   pending: 'Pending',
@@ -107,18 +120,78 @@ const fxWatchSeed: {
   rate: number;
   dailyChangePercentage: number;
 }[] = [
-  { baseCurrencyCode: 'EUR', quoteCurrencyCode: 'GBP', rate: 0.8688, dailyChangePercentage: -0.2 },
-  { baseCurrencyCode: 'USD', quoteCurrencyCode: 'GBP', rate: 0.737, dailyChangePercentage: -0.43 },
-  { baseCurrencyCode: 'GBP', quoteCurrencyCode: 'USD', rate: 1.3569, dailyChangePercentage: 0.31 },
-  { baseCurrencyCode: 'EUR', quoteCurrencyCode: 'USD', rate: 1.1788, dailyChangePercentage: 0.14 },
-  { baseCurrencyCode: 'USD', quoteCurrencyCode: 'EUR', rate: 0.8483, dailyChangePercentage: -0.12 },
-  { baseCurrencyCode: 'GBP', quoteCurrencyCode: 'EUR', rate: 1.1511, dailyChangePercentage: 0.28 },
-  { baseCurrencyCode: 'USD', quoteCurrencyCode: 'NGN', rate: 1540.3, dailyChangePercentage: 0.64 },
-  { baseCurrencyCode: 'GBP', quoteCurrencyCode: 'NGN', rate: 2088.7, dailyChangePercentage: 0.58 },
-  { baseCurrencyCode: 'EUR', quoteCurrencyCode: 'NGN', rate: 1813.4, dailyChangePercentage: 0.42 },
-  { baseCurrencyCode: 'NGN', quoteCurrencyCode: 'USD', rate: 0.0006, dailyChangePercentage: -0.64 },
-  { baseCurrencyCode: 'NGN', quoteCurrencyCode: 'GBP', rate: 0.0005, dailyChangePercentage: -0.58 },
-  { baseCurrencyCode: 'NGN', quoteCurrencyCode: 'EUR', rate: 0.0006, dailyChangePercentage: -0.42 },
+  {
+    baseCurrencyCode: 'EUR',
+    quoteCurrencyCode: 'GBP',
+    rate: 0.8688,
+    dailyChangePercentage: -0.2,
+  },
+  {
+    baseCurrencyCode: 'USD',
+    quoteCurrencyCode: 'GBP',
+    rate: 0.737,
+    dailyChangePercentage: -0.43,
+  },
+  {
+    baseCurrencyCode: 'GBP',
+    quoteCurrencyCode: 'USD',
+    rate: 1.3569,
+    dailyChangePercentage: 0.31,
+  },
+  {
+    baseCurrencyCode: 'EUR',
+    quoteCurrencyCode: 'USD',
+    rate: 1.1788,
+    dailyChangePercentage: 0.14,
+  },
+  {
+    baseCurrencyCode: 'USD',
+    quoteCurrencyCode: 'EUR',
+    rate: 0.8483,
+    dailyChangePercentage: -0.12,
+  },
+  {
+    baseCurrencyCode: 'GBP',
+    quoteCurrencyCode: 'EUR',
+    rate: 1.1511,
+    dailyChangePercentage: 0.28,
+  },
+  {
+    baseCurrencyCode: 'USD',
+    quoteCurrencyCode: 'NGN',
+    rate: 1540.3,
+    dailyChangePercentage: 0.64,
+  },
+  {
+    baseCurrencyCode: 'GBP',
+    quoteCurrencyCode: 'NGN',
+    rate: 2088.7,
+    dailyChangePercentage: 0.58,
+  },
+  {
+    baseCurrencyCode: 'EUR',
+    quoteCurrencyCode: 'NGN',
+    rate: 1813.4,
+    dailyChangePercentage: 0.42,
+  },
+  {
+    baseCurrencyCode: 'NGN',
+    quoteCurrencyCode: 'USD',
+    rate: 0.0006,
+    dailyChangePercentage: -0.64,
+  },
+  {
+    baseCurrencyCode: 'NGN',
+    quoteCurrencyCode: 'GBP',
+    rate: 0.0005,
+    dailyChangePercentage: -0.58,
+  },
+  {
+    baseCurrencyCode: 'NGN',
+    quoteCurrencyCode: 'EUR',
+    rate: 0.0006,
+    dailyChangePercentage: -0.42,
+  },
 ];
 
 const savingsGoals: SavingsGoal[] = [
@@ -180,7 +253,9 @@ function toActivityDate(dateTime: string) {
 }
 
 function sortByCreatedAtDesc<T extends { createdAt: string }>(items: T[]) {
-  return [...items].sort((left, right) => toActivityDate(right.createdAt) - toActivityDate(left.createdAt));
+  return [...items].sort(
+    (left, right) => toActivityDate(right.createdAt) - toActivityDate(left.createdAt),
+  );
 }
 
 function formatSignedCurrencyAmount(currencyCode: string, amount: number) {
@@ -375,7 +450,7 @@ function formatTimelineTimestamp(date: Date, offsetMinutes: number) {
 function buildTimelineFromTemplates(
   status: string,
   createdAt: string,
-  templates: TimelineTemplateStep[]
+  templates: TimelineTemplateStep[],
 ): PaymentTimelineStep[] {
   const createdDate = new Date(createdAt);
   const currentIndex = templates.findIndex((step) => step.id === status);
@@ -389,19 +464,31 @@ function buildTimelineFromTemplates(
       id: step.id,
       label: step.label,
       description: step.description,
-      timestamp: isCompleted || isCurrent ? formatTimelineTimestamp(createdDate, step.offsetMinutes) : '',
+      timestamp:
+        isCompleted || isCurrent
+          ? formatTimelineTimestamp(createdDate, step.offsetMinutes)
+          : '',
       state: isCompleted ? 'completed' : isCurrent ? 'current' : 'pending',
     };
   });
 }
 
-export function buildFundingTimeline(status: FundingTransactionStatus, createdAt: string) {
-  const templates = status === 'failed' ? fundingTimelineTemplates.failed : fundingTimelineTemplates.active;
+export function buildFundingTimeline(
+  status: FundingTransactionStatus,
+  createdAt: string,
+) {
+  const templates =
+    status === 'failed'
+      ? fundingTimelineTemplates.failed
+      : fundingTimelineTemplates.active;
   return buildTimelineFromTemplates(status, createdAt, templates);
 }
 
 export function buildTransferTimeline(status: TransferStatus, createdAt: string) {
-  const templates = status === 'failed' ? transferTimelineTemplates.failed : transferTimelineTemplates.active;
+  const templates =
+    status === 'failed'
+      ? transferTimelineTemplates.failed
+      : transferTimelineTemplates.active;
   return buildTimelineFromTemplates(status, createdAt, templates);
 }
 
@@ -449,9 +536,14 @@ function buildAccountSeeds(): AppAccount[] {
         {
           id: 'international',
           title: 'For international receipts',
-          description: 'International settlement details for verified business and freelance income.',
+          description:
+            'International settlement details for verified business and freelance income.',
           items: [
-            { id: 'beneficiary-intl', label: 'Beneficiary', value: 'GCF Customer Holding' },
+            {
+              id: 'beneficiary-intl',
+              label: 'Beneficiary',
+              value: 'GCF Customer Holding',
+            },
             { id: 'provider-intl', label: 'Provider', value: 'GCF Settlement Rail' },
             {
               id: 'memo-intl',
@@ -506,7 +598,11 @@ function buildAccountSeeds(): AppAccount[] {
           title: 'For international USD wires',
           description: 'Wire instructions for clients sending USD from abroad.',
           items: [
-            { id: 'beneficiary-wire', label: 'Beneficiary', value: 'GCF FBO Sodiq Ojodu' },
+            {
+              id: 'beneficiary-wire',
+              label: 'Beneficiary',
+              value: 'GCF FBO Sodiq Ojodu',
+            },
             { id: 'swift-wire', label: 'SWIFT', value: 'LEADUS33' },
             {
               id: 'address-wire',
@@ -589,7 +685,8 @@ function buildAccountSeeds(): AppAccount[] {
       accountNumber: 'IBAN reference ending 9044',
       providerName: 'SEPA Collection Rail',
       status: 'active',
-      summaryNote: 'SEPA-friendly receiving details are available whenever you need them.',
+      summaryNote:
+        'SEPA-friendly receiving details are available whenever you need them.',
       changeLabel: 'Virtual IBAN available',
       selectorHint: 'Ready when you need it',
       accentColor: Colors.violet,
@@ -750,7 +847,7 @@ export function buildFundingActivity(funding: FundingTransaction): AppActivityIt
     statusLabel: getFundingStatusLabel(funding.status),
     tone: 'positive',
     avatarText: funding.currencyCode,
-      avatarAccentColor: 'rgba(43, 182, 115, 0.14)',
+    avatarAccentColor: 'rgba(43, 182, 115, 0.14)',
     linkedEntityId: funding.id,
     linkedEntityType: 'funding',
   };
@@ -776,7 +873,10 @@ export function buildTransferActivity(transfer: TransferTransaction): AppActivit
   };
 }
 
-export function buildCardActivity(card: ManagedCard, createdAt = new Date().toISOString()): AppActivityItem {
+export function buildCardActivity(
+  card: ManagedCard,
+  createdAt = new Date().toISOString(),
+): AppActivityItem {
   const activityStatus = card.status === 'pending' ? 'pending' : 'active';
 
   return {
@@ -800,7 +900,7 @@ function buildInitialActivities(
   accounts: AppAccount[],
   fundings: FundingTransaction[],
   transfers: TransferTransaction[],
-  payments: PaymentRecord[]
+  payments: PaymentRecord[],
 ) {
   return sortByCreatedAtDesc([
     ...payments.map(buildPaymentActivity),
@@ -810,7 +910,9 @@ function buildInitialActivities(
   ]);
 }
 
-export function createInitialGoovaAppState(payments = getMockRecentPayments()): GoovaAppState {
+export function createInitialGoovaAppState(
+  payments = getMockRecentPayments(),
+): GoovaAppState {
   const accounts = buildAccountSeeds();
   const fundings = buildFundingSeeds(accounts);
   const transfers = buildTransferSeeds(accounts);
@@ -836,13 +938,18 @@ export function buildDashboardAccount(account: AppAccount) {
   };
 }
 
-export function buildDashboardActivityPreviewItem(item: AppActivityItem): DashboardActivityPreviewItem {
+export function buildDashboardActivityPreviewItem(
+  item: AppActivityItem,
+): DashboardActivityPreviewItem {
   return {
     id: item.id,
     title: item.title,
     subtitle: item.subtitle,
     meta: `${formatActivityListTimestamp(item.createdAt)} - ${item.statusLabel}`,
-    amount: item.amount && item.currencyCode ? formatCurrencyAmount(item.currencyCode, item.amount) : item.statusLabel,
+    amount:
+      item.amount && item.currencyCode
+        ? formatCurrencyAmount(item.currencyCode, item.amount)
+        : item.statusLabel,
     tone: item.tone === 'positive' ? 'positive' : 'negative',
     avatarText: item.avatarText,
     avatarAccentColor: item.avatarAccentColor,
@@ -853,14 +960,14 @@ export function buildDashboardActivityPreviewItem(item: AppActivityItem): Dashbo
 function buildDashboardSpendInsights(
   accounts: AppAccount[],
   payments: PaymentRecord[],
-  transfers: TransferTransaction[]
+  transfers: TransferTransaction[],
 ): DashboardAccountSpendInsight[] {
   return accounts.map((account) => {
     const outgoingPayments = payments.filter(
-      (payment) => payment.sourceAccountId === account.id && payment.direction === 'sent'
+      (payment) => payment.sourceAccountId === account.id && payment.direction === 'sent',
     );
     const outgoingTransfers = transfers.filter(
-      (transfer) => transfer.sourceAccountId === account.id
+      (transfer) => transfer.sourceAccountId === account.id,
     );
     const dynamicSpend =
       outgoingPayments.reduce((total, payment) => total + payment.amount, 0) +
@@ -869,7 +976,7 @@ function buildDashboardSpendInsights(
       spendTrendSeedByCurrency[account.currencyCode] ||
       spendTrendLabels.map((_, index) => (index + 1) * 20);
     const trendSeries = seedSeries.map((point, index) =>
-      Number((point + dynamicSpend * spendTrendWeights[index]).toFixed(2))
+      Number((point + dynamicSpend * spendTrendWeights[index]).toFixed(2)),
     );
     const totalSpentAmount = trendSeries[trendSeries.length - 1] || 0;
     const baselinePreviousMonth = seedSeries[seedSeries.length - 1] * 0.88;
@@ -884,7 +991,7 @@ function buildDashboardSpendInsights(
       monthlyDeltaAmount,
       monthlyDeltaDisplay: formatSignedCurrencyAmount(
         account.currencyCode,
-        monthlyDeltaAmount
+        monthlyDeltaAmount,
       ),
       monthlyDeltaDirection:
         monthlyDeltaAmount > 0 ? 'up' : monthlyDeltaAmount < 0 ? 'down' : 'flat',
@@ -897,17 +1004,17 @@ function buildDashboardSpendInsights(
 }
 
 function buildDashboardCurrencyWatchlist(
-  accounts: AppAccount[]
+  accounts: AppAccount[],
 ): DashboardCurrencyWatchItem[] {
   const accountByCurrency = new Map(
-    accounts.map((account) => [account.currencyCode, account.currencyLabel])
+    accounts.map((account) => [account.currencyCode, account.currencyLabel]),
   );
 
   return fxWatchSeed
     .filter(
       (item) =>
         accountByCurrency.has(item.baseCurrencyCode) &&
-        accountByCurrency.has(item.quoteCurrencyCode)
+        accountByCurrency.has(item.quoteCurrencyCode),
     )
     .map((item) => ({
       id: `${item.baseCurrencyCode}-${item.quoteCurrencyCode}`,
@@ -932,7 +1039,7 @@ function buildDashboardCurrencyWatchlist(
 
 export function buildHomeDashboardSnapshot(
   user: User | null | undefined,
-  state: GoovaAppState
+  state: GoovaAppState,
 ): DashboardSnapshot {
   const firstName = getUserFirstName(user);
 
@@ -946,20 +1053,23 @@ export function buildHomeDashboardSnapshot(
     reminder: {
       id: 'complete-profile',
       title: 'Complete your profile',
-      description: 'Provide details as part of regulatory requirements and unlock higher limits.',
+      description:
+        'Provide details as part of regulatory requirements and unlock higher limits.',
       actionLabel: 'Get started',
     },
     activityPreview: state.activities.slice(0, 3).map(buildDashboardActivityPreviewItem),
     spendInsights: buildDashboardSpendInsights(
       state.accounts,
       state.payments,
-      state.transfers
+      state.transfers,
     ),
     currencyWatchlist: buildDashboardCurrencyWatchlist(state.accounts),
   };
 }
 
-export function buildRecipientsFromPayments(payments: PaymentRecord[]): RecipientRecord[] {
+export function buildRecipientsFromPayments(
+  payments: PaymentRecord[],
+): RecipientRecord[] {
   const seen = new Set<string>();
 
   return payments

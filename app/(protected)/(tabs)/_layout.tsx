@@ -1,96 +1,74 @@
 import { Tabs } from 'expo-router';
+import { CreditCard, Home, Send, User } from 'lucide-react-native';
 import { Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { protectedTabConfig } from '@/components/navigation/protected-tab-config';
-import { TabBarIcon } from '@/components/navigation/tab-bar-icon';
 import { Colors } from '@/constants/colors';
-import { Layout, Radius, Spacing, Typography } from '@/constants/theme';
 
-export default function ProtectedTabsLayout() {
+export default function ProtectedLayout() {
   const insets = useSafeAreaInsets();
-  const tabBarBottomOffset = Math.max(
-    Layout.tabBarBottomOffset,
-    insets.bottom + Spacing.xs
-  );
-  const tabBarExtraInset = Math.max(0, insets.bottom - Spacing.xs);
 
   return (
     <Tabs
-      initialRouteName="home"
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: Colors.primaryStrong,
-        tabBarActiveBackgroundColor: 'transparent',
-        tabBarInactiveTintColor: Colors.textMuted,
+        tabBarActiveTintColor: Colors.primary,
+        tabBarInactiveTintColor: Colors.secondary,
         tabBarHideOnKeyboard: true,
-        tabBarLabelStyle: {
-          fontSize: Typography.micro.fontSize,
-          fontWeight: '600',
-          lineHeight: Typography.micro.lineHeight,
-          marginTop: 2,
-        },
         tabBarStyle: {
-          backgroundColor: Colors.surface,
-          borderColor: Colors.border,
-          borderRadius: Radius.full,
+          backgroundColor: Colors.white,
           borderTopWidth: 1,
-          bottom: tabBarBottomOffset,
+          borderColor: Colors.border,
+          height: Platform.OS === 'ios' ? 88 : 68,
+          paddingBottom: Platform.OS === 'ios' ? insets.bottom : 12,
+          paddingTop: 12,
           elevation: 0,
-          height: Layout.tabBarHeight + tabBarExtraInset,
-          left: Layout.screenPadding,
-          overflow: 'hidden',
-          paddingBottom: Platform.OS === 'ios' ? 14 + tabBarExtraInset : 12,
-          paddingHorizontal: 14,
-          paddingTop: 9,
-          position: 'absolute',
-          right: Layout.screenPadding,
-          shadowColor: Colors.shadow,
-          shadowOffset: { width: 0, height: 10 },
-          shadowOpacity: 0.04,
-          shadowRadius: 18,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: -2 },
+          shadowOpacity: 0.05,
+          shadowRadius: 10,
         },
-        tabBarItemStyle: {
-          borderRadius: Radius.lg,
-          marginHorizontal: 3,
-          paddingHorizontal: 0,
-          paddingVertical: 2,
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontWeight: '600',
+          marginBottom: Platform.OS === 'ios' ? 0 : 5,
         },
-      }}>
-      {protectedTabConfig.map((tab) => (
-        <Tabs.Screen
-          key={tab.name}
-          name={tab.name}
-          options={{
-            title: tab.title,
-            tabBarIcon: ({ color, focused }) => (
-              <TabBarIcon color={color} focused={focused} name={tab.iconName} />
-            ),
-          }}
-        />
-      ))}
+      }}
+    >
+      <Tabs.Screen
+        name="index"
+        options={{
+          title: 'Home',
+          tabBarIcon: ({ color, size }) => (
+            <Home size={22} color={color} strokeWidth={2} />
+          ),
+        }}
+      />
       <Tabs.Screen
         name="cards"
         options={{
-          href: null,
+          title: 'Cards',
+          tabBarIcon: ({ color, size }) => (
+            <CreditCard size={22} color={color} strokeWidth={2} />
+          ),
         }}
       />
       <Tabs.Screen
-        name="accounts"
+        name="payments"
         options={{
-          href: null,
+          title: 'Payments',
+          tabBarIcon: ({ color, size }) => (
+            <Send size={22} color={color} strokeWidth={2} />
+          ),
         }}
       />
       <Tabs.Screen
-        name="savings"
+        name="account"
         options={{
-          href: null,
-        }}
-      />
-      <Tabs.Screen
-        name="profile"
-        options={{
-          href: null,
+          title: 'Account',
+          tabBarIcon: ({ color, size }) => (
+            <User size={22} color={color} strokeWidth={2} />
+          ),
         }}
       />
     </Tabs>

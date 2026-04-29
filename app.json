@@ -1,48 +1,38 @@
 {
   "expo": {
     "name": "Greencard",
-    "slug": "gcf",
+    "slug": "greencard-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "gcf",
+    "scheme": "greencard",
     "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "icon": "./assets/expo.icon"
+      "bundleIdentifier": "com.greencard.app"
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#050B14",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "backgroundColor": "#0A0A0A",
+        "foregroundImage": "./assets/images/icon.png"
       },
-      "predictiveBackGestureEnabled": false
-    },
-    "web": {
-      "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "package": "com.greencard.app"
     },
     "plugins": [
       "expo-router",
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#050B14",
-          "android": {
-            "image": "./assets/images/splash-icon.png",
-            "imageWidth": 76
-          }
+          "image": "./assets/images/icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#0A0A0A"
         }
-      ],
-      "expo-secure-store",
-      "expo-web-browser",
-      "expo-font"
+      ]
     ],
     "experiments": {
-      "typedRoutes": true,
-      "reactCompiler": true
+      "typedRoutes": true
     }
   }
 }
