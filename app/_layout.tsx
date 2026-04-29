@@ -1,20 +1,21 @@
 import '@/global.css';
 
 import { Stack } from 'expo-router';
-import { View } from 'react-native';
 import { configureReanimatedLogger } from 'react-native-reanimated';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+
+import { ThemeProvider } from '../components/ThemeProvider';
 
 configureReanimatedLogger({ strict: false });
 
 export default function RootLayout() {
   return (
     <SafeAreaProvider>
-      <View style={{ flex: 1, backgroundColor: '#0A0A0A' }}>
+      <ThemeProvider>
         <Stack
           screenOptions={{
             headerShown: false,
-            contentStyle: { backgroundColor: '#0A0A0A' },
+            contentStyle: { backgroundColor: 'transparent' },
             animation: 'slide_from_right',
           }}
         >
@@ -23,7 +24,7 @@ export default function RootLayout() {
           <Stack.Screen name="(protected)" />
           <Stack.Screen name="+not-found" />
         </Stack>
-      </View>
+      </ThemeProvider>
     </SafeAreaProvider>
   );
 }

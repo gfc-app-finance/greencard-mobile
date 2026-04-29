@@ -1,4 +1,4 @@
-/** @type {import('tailwindcss').Config} */
+// Updated tailwind.config.js
 module.exports = {
   darkMode: 'class',
   content: [
@@ -17,48 +17,26 @@ module.exports = {
         '2xl': '32px',
       },
       colors: {
-        background: '#0A0A0A',
-        foreground: '#FFFFFF',
-
-        card: {
-          DEFAULT: '#171717',
-          foreground: '#FFFFFF',
-        },
-
+        background: 'rgb(var(--background))',
+        foreground: 'rgb(var(--foreground))',
         primary: {
-          DEFAULT: '#0F766E',
+          DEFAULT: 'rgb(var(--primary))',
           soft: '#DFF4F1',
           foreground: '#FFFFFF',
         },
-
-        secondary: {
-          DEFAULT: '#083F3B',
-          foreground: '#FFFFFF',
-        },
-
-        accent: {
-          DEFAULT: '#22D3EE',
-          foreground: '#0A0A0A',
-        },
-
-        muted: {
-          DEFAULT: '#737373',
-          foreground: '#A3A3A3',
-        },
-
-        border: '#262626',
-        input: '#171717',
-        ring: '#0F766E',
+        border: 'rgb(var(--border))',
+        input: 'rgb(var(--input))',
       },
       fontFamily: {
-        heading: ['Inter_600SemiBold'],
-        'heading-bold': ['Inter_700Bold'],
-        body: ['Inter_400Regular'],
-        'body-medium': ['Inter_500Medium'],
+        sans: ['Inter_400Regular', 'system-ui', 'sans-serif'],
+        medium: ['Inter_500Medium', 'system-ui', 'sans-serif'],
+        semibold: ['Inter_600SemiBold', 'system-ui', 'sans-serif'],
+        bold: ['Inter_700Bold', 'system-ui', 'sans-serif'],
+        black: ['Inter_900Black', 'system-ui', 'sans-serif'],
       },
-      boxShadow: {
-        'hard-5': '0px 2px 10px 0px rgba(15, 118, 110, 0.10)',
-        'soft-2': '0px 0px 20px rgba(15, 118, 110, 0.2)',
+      fontSize: {
+        headline: ['2.25rem', { lineHeight: '2.5rem', letterSpacing: '-0.04em' }], // tighter tracking for headlines
+        'body-lg': ['1.125rem', { lineHeight: '1.6rem' }],
       },
     },
   },
